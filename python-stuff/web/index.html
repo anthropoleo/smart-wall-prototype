@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LED Wall Controller</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>LED Wall Controller</h1>
+        <div class="status" id="status">Disconnected</div>
+      </header>
+
+      <section class="panel">
+        <div class="row">
+          <label>
+            Port
+            <select id="portSelect"></select>
+          </label>
+          <button id="refreshPorts">Refresh</button>
+          <button id="connectBtn">Connect</button>
+          <button id="disconnectBtn">Disconnect</button>
+        </div>
+
+        <div class="row">
+          <label>
+            Brightness
+            <input id="bright" type="range" min="0" max="255" value="32" />
+          </label>
+          <span class="mono" id="brightVal">32</span>
+          <button id="applyBright">Apply</button>
+        </div>
+
+        <div class="row">
+          <label>
+            Color
+            <input id="color" type="color" value="#ff0000" />
+          </label>
+          <button id="fillBtn">Fill</button>
+          <button id="clearBtn">Clear</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="hint">
+          Click an LED to paint it. Numbers are physical LED indices: 1 is the
+          bottom LED, 15 is the top.
+        </div>
+        <div class="strip" id="strip"></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
