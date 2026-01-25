@@ -1,3 +1,15 @@
+"""
+Serial transport + command wrapper for the ESP32 LED strip firmware.
+
+This module:
+- Finds a likely ESP32 serial port (or uses a user-provided one)
+- Opens the port at 115200 baud
+- Sends ASCII line commands (e.g. "SET 0 255 0 0") and waits for "OK"/"ERR"
+
+It’s the single place that understands the serial protocol details; higher layers
+(FastAPI, CLI tools) call these methods instead of dealing with raw bytes.
+"""
+
 import time
 import threading
 from dataclasses import dataclass
@@ -63,6 +75,8 @@ def pick_port(preferred: str | None) -> str:
 
 
 class LedSerialController:
+    """Thread-safe serial client for the firmware’s line-based protocol."""
+
     def __init__(self, port: str | None = None, baud: int = BAUD):
         self._preferred_port = port
         self._baud = baud

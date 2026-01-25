@@ -1,3 +1,15 @@
+"""
+FastAPI backend for the LED wall prototype.
+
+Serves:
+- A small static web UI under `/` (files in `python-stuff/web/`)
+- JSON API endpoints under `/api/*` that translate browser actions into serial
+  commands sent to the ESP32 (via `ledwall.LedSerialController`)
+
+This process runs on the host computer; it talks to the microcontroller over the
+USB serial port that appears when the ESP32 is plugged in.
+"""
+
 import os
 import logging
 import sys

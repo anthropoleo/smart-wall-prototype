@@ -1,3 +1,10 @@
+"""
+CLI smoke test for the ESP32 LED serial protocol.
+
+This is optional (not used by the web UI). It’s useful for quick sanity checks:
+connect, query INFO, ping, set brightness, cycle a few colors, then clear.
+"""
+
 import argparse
 import time
 

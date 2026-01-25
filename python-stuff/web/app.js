@@ -1,3 +1,11 @@
+/**
+ * LED Wall Controller frontend logic.
+ *
+ * Renders a vertical "strip" of LEDs and calls the backend `/api/*` endpoints.
+ * The indices sent to the API are 0-based physical indices (as used by firmware).
+ * For display, the UI renders LED 1 at the bottom and LED 15 at the top.
+ */
+
 const statusEl = document.getElementById("status");
 const portSelect = document.getElementById("portSelect");
 const refreshPortsBtn = document.getElementById("refreshPorts");

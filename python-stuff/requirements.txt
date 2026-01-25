@@ -1,4 +1,5 @@
+# Python dependencies for the FastAPI backend + serial driver.
+# Install with: `pip install -r requirements.txt`
 fastapi>=0.110
 uvicorn[standard]>=0.27
 pyserial>=3.5
-
