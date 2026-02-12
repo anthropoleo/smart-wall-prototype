@@ -2,24 +2,28 @@
 
 ## Goal
 
-Build a mini “smart wall” prototype: an ESP32 drives a 15‑LED addressable strip, and a Python app provides an API + UI to control individual LEDs (future: hold routes, animations, timed problems).
+Build a mini “smart wall” prototype: an ESP32 drives a 35‑LED addressable wall (5x7), and a Python app provides an API + UI to control individual LEDs (future: hold routes, animations, timed problems).
 
 ## Architecture
 
-- **ESP32 firmware (PlatformIO / Arduino / FastLED)**: line-based serial command protocol.
-- **Python backend (FastAPI)**: talks to the ESP32 over serial and exposes HTTP endpoints.
-- **Web UI**: served by the backend; lets you click LEDs (1–15) and set colors/brightness.
+- **ESP32 firmware (PlatformIO / Arduino / FastLED)**: line-based command protocol exposed on both USB serial and HTTP (`/cmd`) while running as an AP.
+- **Python backend (FastAPI)**: talks to the ESP32 over serial or Wi‑Fi and exposes HTTP endpoints.
+- **Web UI**: served by the backend; lets you click LEDs, set colors/brightness, and choose transport (`serial` or `wifi`).
 
 ## Key Files
 
 - Firmware: `src/main.cpp`
 - Python serial driver: `python-stuff/ledwall/serial_controller.py`
+- Python Wi‑Fi driver: `python-stuff/ledwall/wifi_controller.py`
 - API server: `python-stuff/server.py`
 - Web UI: `python-stuff/web/index.html`, `python-stuff/web/app.js`, `python-stuff/web/style.css`
 
-## Serial Protocol (ESP32)
+## Device Command Protocol (ESP32)
 
-All commands are ASCII lines at **115200 baud**. Responses are single lines starting with `OK` or `ERR`.
+All commands are ASCII lines. Responses are single lines starting with `OK` or `ERR`.
+
+- Serial transport: `115200` baud
+- Wi‑Fi transport: `GET /cmd?q=<COMMAND>`
 
 - `PING` → `OK`
 - `INFO` → `OK NUM_LEDS <n> BRIGHT <0-255>`
@@ -30,6 +34,12 @@ All commands are ASCII lines at **115200 baud**. Responses are single lines star
 - `SHOW` → `OK`
 - `CLEAR` → `OK`
 
+## Wi‑Fi AP Defaults (Firmware)
+
+- SSID: `LED-WALL-ESP32`
+- Password: `climbsafe123`
+- Host IP: `192.168.4.1` (default SoftAP IP)
+
 ## Dev Workflow
 
 - Flash firmware: `pio run -t upload`
@@ -39,15 +49,18 @@ All commands are ASCII lines at **115200 baud**. Responses are single lines star
   - `pip install -r requirements.txt`
   - `python3 -m uvicorn server:app --reload --port 8000`
   - Open `http://127.0.0.1:8000/`
+  - In UI, choose:
+    - **Serial (USB)** + port, or
+    - **Wi‑Fi (ESP32 AP)** + host `192.168.4.1`
 
 ## UI Notes
 
-- LEDs are displayed **vertically** (top to bottom) and labeled **1–15**.
-- Clicking a LED sends `/api/set` with a 0-based index; the UI shows 1-based labels.
+- LEDs are displayed as a **5x7 grid** (35 total) using a right-to-left vertical serpentine map.
+- Clicking a LED sends `/api/set` with a 0-based physical index; UI labels are 1-based.
 
 ## Next Steps (Roadmap)
 
 - Add “routes”: save named patterns (which holds/LEDs light up).
 - Add timers / countdowns / difficulty presets.
-- Add Wi‑Fi transport (ESP32 HTTP/WebSocket) to remove the serial tether for the prototype.
-
+- Add AP credential configuration + stronger auth for safer deployments.
+- Consider ESP32 WebSocket push updates for lower-latency UI sync.
