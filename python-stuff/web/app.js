@@ -1,13 +1,15 @@
 /**
  * LED Wall Controller frontend logic.
  *
- * Renders a vertical "strip" of LEDs and calls the backend `/api/*` endpoints.
- * The indices sent to the API are 0-based physical indices (as used by firmware).
- * For display, the UI renders LED 1 at the bottom and LED 15 at the top.
+ * Renders a 5x7 LED grid and calls backend `/api/*` endpoints.
+ * Physical indices are 0-based when sent to firmware, while labels are 1-based.
+ * Layout mapping is a right-to-left vertical serpentine starting at bottom-right.
  */
 
 const statusEl = document.getElementById("status");
+const transportSelect = document.getElementById("transportSelect");
 const portSelect = document.getElementById("portSelect");
+const hostInput = document.getElementById("hostInput");
 const refreshPortsBtn = document.getElementById("refreshPorts");
 const connectBtn = document.getElementById("connectBtn");
 const disconnectBtn = document.getElementById("disconnectBtn");
@@ -21,10 +23,15 @@ const fillBtn = document.getElementById("fillBtn");
 const clearBtn = document.getElementById("clearBtn");
 
 const strip = document.getElementById("strip");
+const selectedInfo = document.getElementById("selectedInfo");
+const swatches = Array.from(document.querySelectorAll(".swatch"));
 
-const NUM_LEDS = 15;
+const GRID_COLS = 5;
+const GRID_ROWS = 7;
+const NUM_LEDS = GRID_COLS * GRID_ROWS;
 let selected = 0;
 let state = Array.from({ length: NUM_LEDS }, () => [0, 0, 0]);
+let warnedCountMismatch = false;
 
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
@@ -36,6 +43,16 @@ function hexToRgb(hex) {
 
 function rgbToCss([r, g, b]) {
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function gridToIndex(col, row) {
+  const colFromRight = GRID_COLS - 1 - col;
+  const base = colFromRight * GRID_ROWS;
+  if (colFromRight % 2 === 0) {
+    const rowFromBottom = GRID_ROWS - 1 - row;
+    return base + rowFromBottom;
+  }
+  return base + row;
 }
 
 async function api(method, path, body) {
@@ -62,35 +79,62 @@ async function api(method, path, body) {
   return data;
 }
 
+function renderSelected() {
+  selectedInfo.textContent = `Selected LED: ${selected + 1}`;
+}
+
+function syncSwatchSelection() {
+  const current = color.value.toLowerCase();
+  for (const swatch of swatches) {
+    swatch.classList.toggle("active", swatch.dataset.color?.toLowerCase() === current);
+  }
+}
+
 function render() {
   strip.innerHTML = "";
-  // Render top-to-bottom as 15..1 (so LED 1 is the bottom LED).
-  for (let pos = 0; pos < NUM_LEDS; pos++) {
-    const i = NUM_LEDS - 1 - pos; // physical index
-    const el = document.createElement("div");
-    el.className = "led" + (i === selected ? " selected" : "");
-    el.style.background = rgbToCss(state[i]);
-    el.title = `LED ${i + 1}`;
-    el.textContent = String(i + 1);
-    const [r0, g0, b0] = state[i];
-    el.style.boxShadow = `0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 16px rgba(${r0}, ${g0}, ${b0}, 0.25)`;
-    el.addEventListener("click", async (ev) => {
-      if (!ev.shiftKey) selected = i;
-      const [r, g, b] = hexToRgb(color.value);
-      state[i] = [r, g, b];
-      render();
-      try {
-        await api("POST", "/api/set", { index: i, r, g, b });
-      } catch (e) {
-        setStatus(`Set failed: ${e.message}`);
-      }
-    });
-    strip.appendChild(el);
+  let drawIndex = 0;
+
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      const i = gridToIndex(col, row);
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "led" + (i === selected ? " selected" : "");
+      el.style.background = rgbToCss(state[i]);
+      el.title = `LED ${i + 1}`;
+      el.textContent = String(i + 1);
+      el.style.setProperty("--i", String(drawIndex));
+      const [r0, g0, b0] = state[i];
+      el.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.12) inset, 0 8px 16px rgba(${r0}, ${g0}, ${b0}, 0.25)`;
+      el.addEventListener("click", async (ev) => {
+        if (!ev.shiftKey) selected = i;
+        const [r, g, b] = hexToRgb(color.value);
+        state[i] = [r, g, b];
+        render();
+        try {
+          await api("POST", "/api/set", { index: i, r, g, b });
+        } catch (e) {
+          setStatus(`Set failed: ${e.message}`);
+        }
+      });
+      strip.appendChild(el);
+      drawIndex += 1;
+    }
   }
+
+  renderSelected();
+  syncSwatchSelection();
 }
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function syncTransportUi() {
+  const isWifi = transportSelect.value === "wifi";
+  portSelect.disabled = isWifi;
+  refreshPortsBtn.disabled = isWifi;
+  hostInput.disabled = !isWifi;
 }
 
 async function refreshPorts() {
@@ -110,12 +154,29 @@ async function refreshPorts() {
   }
 }
 
+function applyDeviceInfo(info) {
+  if (!info || typeof info !== "object") return;
+  if (typeof info.brightness === "number") {
+    bright.value = String(info.brightness);
+    brightVal.textContent = String(info.brightness);
+  }
+  if (typeof info.num_leds === "number" && info.num_leds !== NUM_LEDS && !warnedCountMismatch) {
+    warnedCountMismatch = true;
+    setStatus(`Device reports ${info.num_leds} LEDs; UI layout expects ${NUM_LEDS}.`);
+  }
+}
+
 async function pollStatus() {
   try {
     const s = await api("GET", "/api/status");
     if (s.connected) {
-      const info = s.info?.raw ? ` (${s.info.raw})` : "";
-      setStatus(`Connected: ${s.port}${info}`);
+      const endpoint = s.endpoint || "(unknown)";
+      const mode = s.transport || "serial";
+      const bits = [`Connected [${mode}]`, endpoint];
+      if (typeof s.info?.num_leds === "number") bits.push(`${s.info.num_leds} LEDs`);
+      if (typeof s.info?.brightness === "number") bits.push(`Bright ${s.info.brightness}`);
+      setStatus(bits.join(" • "));
+      applyDeviceInfo(s.info);
     } else {
       setStatus("Disconnected");
     }
@@ -127,6 +188,16 @@ async function pollStatus() {
 bright.addEventListener("input", () => {
   brightVal.textContent = String(bright.value);
 });
+
+color.addEventListener("input", syncSwatchSelection);
+
+for (const swatch of swatches) {
+  swatch.addEventListener("click", () => {
+    if (!swatch.dataset.color) return;
+    color.value = swatch.dataset.color;
+    syncSwatchSelection();
+  });
+}
 
 applyBright.addEventListener("click", async () => {
   try {
@@ -167,9 +238,12 @@ refreshPortsBtn.addEventListener("click", async () => {
 });
 
 connectBtn.addEventListener("click", async () => {
+  const transport = transportSelect.value;
   const port = portSelect.value || null;
+  const host = hostInput.value.trim() || null;
   try {
-    const res = await api("POST", "/api/connect", { port });
+    const res = await api("POST", "/api/connect", { transport, port, host });
+    applyDeviceInfo(res.info);
     if (res.warning) setStatus(res.warning);
     await pollStatus();
   } catch (e) {
@@ -186,7 +260,10 @@ disconnectBtn.addEventListener("click", async () => {
   }
 });
 
+transportSelect.addEventListener("change", syncTransportUi);
+
 render();
 refreshPorts().catch(() => {});
+syncTransportUi();
 pollStatus().catch(() => {});
 setInterval(pollStatus, 2500);

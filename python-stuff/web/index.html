@@ -14,16 +14,33 @@
   </head>
   <body>
     <main class="wrap">
-      <header class="header">
-        <h1>LED Wall Controller</h1>
+      <header class="header panel">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="brand-kicker">ON BELAY CLIMBING</p>
+            <h1>LED Wall Controller</h1>
+          </div>
+        </div>
         <div class="status" id="status">Disconnected</div>
       </header>
 
-      <section class="panel">
+      <section class="panel controls-panel">
         <div class="row">
           <label>
-            Port
+            Transport
+            <select id="transportSelect">
+              <option value="serial">Serial (USB)</option>
+              <option value="wifi">Wi‑Fi (ESP32 AP)</option>
+            </select>
+          </label>
+          <label>
+            Serial Port
             <select id="portSelect"></select>
+          </label>
+          <label>
+            Wi‑Fi Host
+            <input id="hostInput" type="text" value="192.168.4.1" placeholder="192.168.4.1" />
           </label>
           <button id="refreshPorts">Refresh</button>
           <button id="connectBtn">Connect</button>
@@ -36,7 +53,7 @@
             <input id="bright" type="range" min="0" max="255" value="32" />
           </label>
           <span class="mono" id="brightVal">32</span>
-          <button id="applyBright">Apply</button>
+          <button id="applyBright" type="button">Apply</button>
         </div>
 
         <div class="row">
@@ -44,17 +61,29 @@
             Color
             <input id="color" type="color" value="#ff0000" />
           </label>
-          <button id="fillBtn">Fill</button>
-          <button id="clearBtn">Clear</button>
+          <div class="swatches">
+            <button type="button" class="swatch" data-color="#ffffff" title="White"></button>
+            <button type="button" class="swatch" data-color="#0a0a0c" title="Black"></button>
+            <button type="button" class="swatch" data-color="#f31892" title="Pink"></button>
+            <button type="button" class="swatch" data-color="#11bde9" title="Cyan"></button>
+          </div>
+          <button id="fillBtn" type="button">Fill All</button>
+          <button id="clearBtn" type="button">Clear All</button>
         </div>
       </section>
 
       <section class="panel">
-        <div class="hint">
-          Click an LED to paint it. Numbers are physical LED indices: 1 is the
-          bottom LED, 15 is the top.
+        <div class="grid-top">
+          <h2>5 x 7 Grid (35 LEDs)</h2>
+          <span class="mono" id="selectedInfo">Selected LED: 1</span>
         </div>
-        <div class="strip" id="strip"></div>
+        <div class="hint">
+          Serpentine wiring starts at bottom-right. Click any hold to set that
+          physical LED index.
+        </div>
+        <div class="grid-shell">
+          <div class="strip" id="strip"></div>
+        </div>
       </section>
     </main>
 
