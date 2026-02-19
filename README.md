@@ -11,11 +11,13 @@ ESP32 + FastAPI + Web UI controller for a 35-LED climbing wall prototype.
     - HTTP on ESP32 AP (`GET /cmd?q=<COMMAND>`)
 - **Backend (`server.py`)**
   - Serves UI and forwards API requests to either serial or Wi‑Fi transport.
+  - Persists route slots in `python-stuff/data/routes.json`.
   - Transport drivers:
     - `ledwall/serial_controller.py`
     - `ledwall/wifi_controller.py`
 - **Frontend (`web/`)**
   - 5x7 clickable grid with serpentine index mapping.
+  - Saved-route panel: Levels 4-7, 3 slots per level.
   - Transport selector: `Serial (USB)` or `Wi‑Fi (ESP32 AP)`.
 
 ## ESP32 AP defaults
@@ -68,3 +70,17 @@ pio run -t upload
 - `GET /api/status`
 - `GET/POST /api/color-order` (`rgb`, `grb`, `gbr`, etc.)
 - `POST /api/brightness`, `POST /api/fill`, `POST /api/set`, `POST /api/frame`, `POST /api/clear`
+- Routes:
+  - `GET /api/routes` list levels + route slot names
+  - `GET /api/routes/{level}/{slot}` get route payload (includes frame)
+  - `POST /api/routes/{level}/{slot}/apply` light route on wall
+  - `PUT /api/routes/{level}/{slot}` save a slot (`name`, `frame`, `pin`)
+
+## Route editing security
+
+- Setter route edits are gated by `LED_ROUTE_EDITOR_PIN` (default `2468`).
+- Override with:
+
+```bash
+export LED_ROUTE_EDITOR_PIN=your-pin
+```

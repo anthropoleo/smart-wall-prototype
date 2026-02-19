@@ -1,9 +1,8 @@
 /**
  * LED Wall Controller frontend logic.
  *
- * Renders a 5x7 LED grid and calls backend `/api/*` endpoints.
- * Physical indices are 0-based when sent to firmware, while labels are 1-based.
- * Layout mapping is a right-to-left vertical serpentine starting at bottom-right.
+ * Renders a 5x7 LED grid, route folders by difficulty, and calls backend
+ * `/api/*` endpoints.
  */
 
 const statusEl = document.getElementById("status");
@@ -26,6 +25,14 @@ const strip = document.getElementById("strip");
 const selectedInfo = document.getElementById("selectedInfo");
 const swatches = Array.from(document.querySelectorAll(".swatch"));
 
+const routeFolders = document.getElementById("routeFolders");
+const reloadRoutesBtn = document.getElementById("reloadRoutesBtn");
+const editModeToggle = document.getElementById("editModeToggle");
+const routePinInput = document.getElementById("routePin");
+const routeNameInput = document.getElementById("routeName");
+const routeSelection = document.getElementById("routeSelection");
+const saveRouteBtn = document.getElementById("saveRouteBtn");
+
 const GRID_COLS = 5;
 const GRID_ROWS = 7;
 const NUM_LEDS = GRID_COLS * GRID_ROWS;
@@ -34,6 +41,17 @@ let state = Array.from({ length: NUM_LEDS }, () => [0, 0, 0]);
 let warnedCountMismatch = false;
 const ledEls = Array.from({ length: NUM_LEDS }, () => null);
 let activeColorHex = color.value.toLowerCase();
+
+let selectedRoute = null;
+const routeBtnByKey = new Map();
+
+function routeKey(level, slot) {
+  return `${level}:${slot}`;
+}
+
+function cloneFrame(frame) {
+  return frame.map(([r, g, b]) => [r, g, b]);
+}
 
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
@@ -131,6 +149,25 @@ function updateAllLedVisuals() {
   }
 }
 
+function applyFrameToState(frame) {
+  if (!Array.isArray(frame) || frame.length !== NUM_LEDS) return false;
+  const next = [];
+  for (const colorRow of frame) {
+    if (!Array.isArray(colorRow) || colorRow.length !== 3) return false;
+    const [r, g, b] = colorRow;
+    const rr = Number(r);
+    const gg = Number(g);
+    const bb = Number(b);
+    if (![rr, gg, bb].every((v) => Number.isInteger(v) && v >= 0 && v <= 255)) {
+      return false;
+    }
+    next.push([rr, gg, bb]);
+  }
+  state = next;
+  updateAllLedVisuals();
+  return true;
+}
+
 function setSelectedIndex(i) {
   if (i === selected) return;
   ledEls[selected]?.classList.remove("selected");
@@ -193,6 +230,94 @@ function syncTransportUi() {
   hostInput.disabled = !isWifi;
 }
 
+function syncRouteEditorUi() {
+  const enabled = editModeToggle.checked;
+  routePinInput.disabled = !enabled;
+  routeNameInput.disabled = !enabled;
+  saveRouteBtn.disabled = !enabled || !selectedRoute;
+}
+
+function refreshRouteSelectionText() {
+  if (!selectedRoute) {
+    routeSelection.textContent = "Selected route: none";
+  } else {
+    routeSelection.textContent = `Selected route: Level ${selectedRoute.level} · Slot ${selectedRoute.slot}`;
+  }
+
+  const activeKey = selectedRoute ? routeKey(selectedRoute.level, selectedRoute.slot) : "";
+  for (const [key, button] of routeBtnByKey.entries()) {
+    button.classList.toggle("active", key === activeKey);
+  }
+}
+
+function setSelectedRoute(level, slot, name = "") {
+  selectedRoute = { level, slot };
+  if (typeof name === "string" && name.trim()) {
+    routeNameInput.value = name.trim();
+  }
+  refreshRouteSelectionText();
+  syncRouteEditorUi();
+}
+
+function renderRoutes(levels) {
+  routeFolders.innerHTML = "";
+  routeBtnByKey.clear();
+
+  if (!Array.isArray(levels) || !levels.length) {
+    const empty = document.createElement("div");
+    empty.className = "mono";
+    empty.textContent = "No routes available.";
+    routeFolders.appendChild(empty);
+    refreshRouteSelectionText();
+    syncRouteEditorUi();
+    return;
+  }
+
+  for (const levelInfo of levels) {
+    const level = Number(levelInfo.level);
+    const routes = Array.isArray(levelInfo.routes) ? levelInfo.routes : [];
+
+    const folder = document.createElement("details");
+    folder.className = "level-folder";
+    if (selectedRoute) {
+      folder.open = selectedRoute.level === level;
+    } else {
+      folder.open = level === 4;
+    }
+
+    const summary = document.createElement("summary");
+    summary.textContent = `Level ${level}`;
+
+    const list = document.createElement("div");
+    list.className = "route-list";
+
+    for (const route of routes) {
+      const slot = Number(route.slot);
+      const name = String(route.name || `Route ${slot}`);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "route-item";
+      button.textContent = `${slot}. ${name}`;
+      button.addEventListener("click", () => {
+        void applyRoute(level, slot, name);
+      });
+      routeBtnByKey.set(routeKey(level, slot), button);
+      list.appendChild(button);
+    }
+
+    folder.appendChild(summary);
+    folder.appendChild(list);
+    routeFolders.appendChild(folder);
+  }
+
+  if (selectedRoute && !routeBtnByKey.has(routeKey(selectedRoute.level, selectedRoute.slot))) {
+    selectedRoute = null;
+    routeNameInput.value = "";
+  }
+  refreshRouteSelectionText();
+  syncRouteEditorUi();
+}
+
 async function refreshPorts() {
   const ports = await api("GET", "/api/ports");
   portSelect.innerHTML = "";
@@ -207,6 +332,38 @@ async function refreshPorts() {
     opt.value = "";
     opt.textContent = "No serial ports found";
     portSelect.appendChild(opt);
+  }
+}
+
+async function loadRoutes() {
+  const payload = await api("GET", "/api/routes");
+  if (typeof payload.num_leds === "number" && payload.num_leds !== NUM_LEDS && !warnedCountMismatch) {
+    warnedCountMismatch = true;
+    setStatus(`Route catalog uses ${payload.num_leds} LEDs; UI layout expects ${NUM_LEDS}.`);
+  }
+  renderRoutes(payload.levels);
+}
+
+async function applyRoute(level, slot, fallbackName) {
+  try {
+    const routePayload = await api("GET", `/api/routes/${level}/${slot}`);
+    const route = routePayload.route;
+    if (route?.frame && !applyFrameToState(route.frame)) {
+      setStatus("Route frame shape mismatch for this wall layout.");
+      return;
+    }
+
+    const resolvedName = route?.name || fallbackName || `Route ${slot}`;
+    setSelectedRoute(level, slot, resolvedName);
+
+    try {
+      await api("POST", `/api/routes/${level}/${slot}/apply`);
+      setStatus(`Applied Level ${level} • ${resolvedName}`);
+    } catch (e) {
+      setStatus(`Route preview loaded, but device apply failed: ${e.message}`);
+    }
+  } catch (e) {
+    setStatus(`Route load failed: ${e.message}`);
   }
 }
 
@@ -290,6 +447,15 @@ refreshPortsBtn.addEventListener("click", async () => {
   }
 });
 
+reloadRoutesBtn.addEventListener("click", async () => {
+  try {
+    await loadRoutes();
+    setStatus("Route catalog reloaded.");
+  } catch (e) {
+    setStatus(`Route reload failed: ${e.message}`);
+  }
+});
+
 connectBtn.addEventListener("click", async () => {
   const transport = transportSelect.value;
   const port = portSelect.value || null;
@@ -313,6 +479,48 @@ disconnectBtn.addEventListener("click", async () => {
   }
 });
 
+saveRouteBtn.addEventListener("click", async () => {
+  if (!editModeToggle.checked) {
+    setStatus("Enable route editing mode first.");
+    return;
+  }
+  if (!selectedRoute) {
+    setStatus("Pick a route slot from the level folders first.");
+    return;
+  }
+
+  const pin = routePinInput.value.trim();
+  if (!pin) {
+    setStatus("Editor PIN is required to save routes.");
+    return;
+  }
+
+  const name = routeNameInput.value.trim();
+  if (!name) {
+    setStatus("Route name is required.");
+    return;
+  }
+
+  try {
+    const payload = {
+      name,
+      pin,
+      frame: cloneFrame(state),
+    };
+    const res = await api("PUT", `/api/routes/${selectedRoute.level}/${selectedRoute.slot}`, payload);
+    const savedName = res.route?.name || name;
+    setSelectedRoute(selectedRoute.level, selectedRoute.slot, savedName);
+    await loadRoutes();
+    setStatus(`Saved Level ${selectedRoute.level} • Slot ${selectedRoute.slot} as "${savedName}".`);
+  } catch (e) {
+    setStatus(`Save route failed: ${e.message}`);
+  }
+});
+
+editModeToggle.addEventListener("change", () => {
+  syncRouteEditorUi();
+});
+
 transportSelect.addEventListener("change", syncTransportUi);
 
 color.addEventListener("input", () => {
@@ -321,7 +529,11 @@ color.addEventListener("input", () => {
 
 applyColorSelection(color.value);
 initGrid();
-refreshPorts().catch(() => {});
 syncTransportUi();
+syncRouteEditorUi();
+refreshPorts().catch(() => {});
+loadRoutes().catch((e) => {
+  setStatus(`Route load failed: ${e.message}`);
+});
 pollStatus().catch(() => {});
 setInterval(pollStatus, 2500);

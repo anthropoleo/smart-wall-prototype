@@ -28,15 +28,22 @@ from ledwall import (
     SerialNotConnectedError,
     WifiNotConnectedError,
 )
+from ledwall.routes_store import RouteStore
 
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
+routes_path = Path(os.getenv("LED_ROUTES_FILE", str(ROOT / "data" / "routes.json"))).expanduser()
+if not routes_path.is_absolute():
+    routes_path = (ROOT / routes_path).resolve()
+
 log = logging.getLogger("ledwall")
 
 app = FastAPI(title="LED Wall Controller", version="0.1.0")
 serial_ctrl = LedSerialController(port=os.getenv("LED_PORT"))
 wifi_ctrl = LedWifiController(host=os.getenv("LED_WIFI_HOST"))
+route_store = RouteStore(path=routes_path, num_leds=35)
+route_editor_pin = os.getenv("LED_ROUTE_EDITOR_PIN", "2468")
 ctrl = serial_ctrl
 transport: Literal["serial", "wifi"] = "serial"
 last_info: dict | None = None
@@ -85,10 +92,28 @@ class ColorOrderRequest(BaseModel):
     order: Literal["rgb", "rbg", "grb", "gbr", "brg", "bgr"]
 
 
+class SaveRouteRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=48)
+    frame: list[list[int]] = Field(
+        description="List of [r,g,b] rows (length must match the route LED count)."
+    )
+    pin: str = Field(min_length=1, max_length=64)
+
+
 def _device_rgb(r: int, g: int, b: int) -> tuple[int, int, int]:
     channels = (int(r), int(g), int(b))
     i0, i1, i2 = CHANNEL_ORDERS[color_order]
     return channels[i0], channels[i1], channels[i2]
+
+
+def _device_frame(frame: list[list[int]]) -> list[tuple[int, int, int]]:
+    colors: list[tuple[int, int, int]] = []
+    for row in frame:
+        if len(row) != 3:
+            raise ValueError("Each color must be [r,g,b].")
+        r, g, b = row
+        colors.append(_device_rgb(r, g, b))
+    return colors
 
 
 def _http_error(e: Exception, status_code: int = 400, hint: str | None = None) -> HTTPException:
@@ -221,6 +246,50 @@ def _require_connected():
         raise HTTPException(status_code=409, detail="Not connected. POST /api/connect first.")
 
 
+def _require_route_editor(pin: str):
+    if not route_editor_pin:
+        raise HTTPException(status_code=503, detail="Route editing is disabled on this server.")
+    if pin != route_editor_pin:
+        raise HTTPException(status_code=403, detail="Invalid route editor PIN.")
+
+
+@app.get("/api/routes")
+def list_routes():
+    return {"ok": True, **route_store.catalog()}
+
+
+@app.get("/api/routes/{level}/{slot}")
+def get_route(level: int, slot: int):
+    try:
+        route = route_store.get_route(level=level, slot=slot)
+        return {"ok": True, "route": route}
+    except Exception as e:
+        raise _http_error(e, status_code=400)
+
+
+@app.post("/api/routes/{level}/{slot}/apply")
+def apply_route(level: int, slot: int):
+    _require_connected()
+    try:
+        route = route_store.get_route(level=level, slot=slot)
+        ctrl.set_frame(_device_frame(route["frame"]))
+        return {"ok": True, "route": route}
+    except Exception as e:
+        raise _http_error(e, status_code=400)
+
+
+@app.put("/api/routes/{level}/{slot}")
+def save_route(level: int, slot: int, req: SaveRouteRequest):
+    try:
+        _require_route_editor(req.pin)
+        route = route_store.save_route(level=level, slot=slot, name=req.name, frame=req.frame)
+        return {"ok": True, "route": route}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _http_error(e, status_code=400)
+
+
 @app.post("/api/brightness")
 def set_brightness(req: BrightnessRequest):
     global last_info
@@ -276,13 +345,7 @@ def set_pixel(req: SetRequest):
 def set_frame(req: FrameRequest):
     _require_connected()
     try:
-        colors: list[tuple[int, int, int]] = []
-        for row in req.colors:
-            if len(row) != 3:
-                raise ValueError("Each color must be [r,g,b].")
-            r, g, b = row
-            colors.append(_device_rgb(r, g, b))
-        ctrl.set_frame(colors)
+        ctrl.set_frame(_device_frame(req.colors))
         return {"ok": True}
     except Exception as e:
         raise _http_error(e, status_code=400)

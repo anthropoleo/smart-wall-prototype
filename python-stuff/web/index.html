@@ -75,19 +75,51 @@
         </div>
       </section>
 
-      <section class="panel">
-        <div class="grid-top">
-          <h2>5 x 7 Grid (35 LEDs)</h2>
-          <span class="mono" id="selectedInfo">Selected LED: 1</span>
-        </div>
-        <div class="hint">
-          Serpentine wiring starts at bottom-right. Click any hold to set that
-          physical LED index. Click the same hold twice with the same color to turn it off.
-        </div>
-        <div class="grid-shell">
-          <div class="strip" id="strip"></div>
-        </div>
-      </section>
+      <div class="workspace">
+        <section class="panel wall-panel">
+          <div class="grid-top">
+            <h2>5 x 7 Grid (35 LEDs)</h2>
+            <span class="mono" id="selectedInfo">Selected LED: 1</span>
+          </div>
+          <div class="hint">
+            Serpentine wiring starts at bottom-right. Click any hold to set that
+            physical LED index. Click the same hold twice with the same color to turn it off.
+          </div>
+          <div class="grid-shell">
+            <div class="strip" id="strip"></div>
+          </div>
+        </section>
+
+        <aside class="panel routes-panel">
+          <div class="routes-head">
+            <h2>Saved Routes</h2>
+            <button id="reloadRoutesBtn" type="button">Reload</button>
+          </div>
+          <div class="hint">
+            Difficulty folders contain 3 route slots each. Click a route to light it up.
+          </div>
+          <div class="route-folders" id="routeFolders"></div>
+
+          <div class="route-editor">
+            <label class="toggle-label">
+              <input id="editModeToggle" type="checkbox" />
+              Route editing mode (setter only)
+            </label>
+            <div class="editor-grid">
+              <label>
+                Editor PIN
+                <input id="routePin" type="password" inputmode="numeric" placeholder="Enter PIN" />
+              </label>
+              <label>
+                Route Name
+                <input id="routeName" type="text" maxlength="48" placeholder="Route name" />
+              </label>
+            </div>
+            <div class="mono" id="routeSelection">Selected route: none</div>
+            <button id="saveRouteBtn" type="button">Save current grid to selected route</button>
+          </div>
+        </aside>
+      </div>
     </main>
 
     <script src="/static/app.js"></script>

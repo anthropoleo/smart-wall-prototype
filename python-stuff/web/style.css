@@ -34,7 +34,7 @@ body {
 }
 
 .wrap {
-  width: min(980px, 100%);
+  width: min(1180px, 100%);
   margin: 0 auto;
   padding: 20px 18px 28px;
 }
@@ -104,6 +104,18 @@ h1 {
   animation: panelIn 560ms ease both;
 }
 
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
+  gap: 12px;
+  align-items: start;
+}
+
+.wall-panel,
+.routes-panel {
+  margin: 0;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -124,7 +136,9 @@ label {
 
 select,
 input[type="range"],
-input[type="color"] {
+input[type="color"],
+input[type="text"],
+input[type="password"] {
   background: rgba(7, 8, 11, 0.8);
   color: var(--text);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -166,6 +180,13 @@ button:hover {
   border-color: rgba(255, 255, 255, 0.35);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34);
   transform: translateY(-1px);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
 }
 
 .mono {
@@ -228,6 +249,98 @@ h2 {
   color: var(--muted);
   font-size: 13px;
   margin-bottom: 12px;
+}
+
+.routes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.route-folders {
+  display: grid;
+  gap: 10px;
+}
+
+.level-folder {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(6, 7, 11, 0.45);
+  overflow: hidden;
+}
+
+.level-folder summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 10px 12px;
+  background: linear-gradient(130deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+}
+
+.level-folder summary::-webkit-details-marker {
+  display: none;
+}
+
+.level-folder summary::after {
+  content: "▸";
+  float: right;
+  transition: transform 140ms ease;
+}
+
+.level-folder[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.route-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.route-item {
+  text-align: left;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.route-item.active {
+  border-color: var(--brand-cyan);
+  box-shadow:
+    0 0 0 1px rgba(17, 189, 233, 0.25) inset,
+    0 8px 18px rgba(17, 189, 233, 0.22);
+}
+
+.route-editor {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  display: grid;
+  gap: 10px;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.editor-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.editor-grid label {
+  display: grid;
+  gap: 6px;
 }
 
 .grid-shell {
@@ -318,6 +431,14 @@ h2 {
   .status {
     width: 100%;
     justify-content: center;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .routes-panel {
+    margin-top: 12px;
   }
 
   .strip {
