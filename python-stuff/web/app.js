@@ -32,6 +32,8 @@ const NUM_LEDS = GRID_COLS * GRID_ROWS;
 let selected = 0;
 let state = Array.from({ length: NUM_LEDS }, () => [0, 0, 0]);
 let warnedCountMismatch = false;
+const ledEls = Array.from({ length: NUM_LEDS }, () => null);
+let activeColorHex = color.value.toLowerCase();
 
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
@@ -43,6 +45,31 @@ function hexToRgb(hex) {
 
 function rgbToCss([r, g, b]) {
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+function rgbEquals(a, b) {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+function applyColorSelection(nextColor, announceOnBlock = false) {
+  const normalized = String(nextColor || "").toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(normalized)) return false;
+  if (normalized === "#000000") {
+    color.value = activeColorHex;
+    syncSwatchSelection();
+    if (announceOnBlock) {
+      setStatus("Black is reserved for OFF. Click the same color twice to turn a light off.");
+    }
+    return false;
+  }
+  activeColorHex = normalized;
+  color.value = normalized;
+  syncSwatchSelection();
+  return true;
+}
+
+function getActiveColorRgb() {
+  return hexToRgb(activeColorHex);
 }
 
 function gridToIndex(col, row) {
@@ -90,38 +117,67 @@ function syncSwatchSelection() {
   }
 }
 
-function render() {
+function updateLedVisual(i) {
+  const el = ledEls[i];
+  if (!el) return;
+  const [r, g, b] = state[i];
+  el.style.background = rgbToCss(state[i]);
+  el.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.12) inset, 0 8px 16px rgba(${r}, ${g}, ${b}, 0.25)`;
+}
+
+function updateAllLedVisuals() {
+  for (let i = 0; i < NUM_LEDS; i++) {
+    updateLedVisual(i);
+  }
+}
+
+function setSelectedIndex(i) {
+  if (i === selected) return;
+  ledEls[selected]?.classList.remove("selected");
+  selected = i;
+  ledEls[selected]?.classList.add("selected");
+  renderSelected();
+}
+
+async function handleLedClick(i, ev) {
+  if (!ev.shiftKey) setSelectedIndex(i);
+  const nextColor = getActiveColorRgb();
+  const previousColor = state[i];
+  const shouldToggleOff = rgbEquals(previousColor, nextColor);
+  const appliedColor = shouldToggleOff ? [0, 0, 0] : nextColor;
+  state[i] = appliedColor;
+  updateLedVisual(i);
+  try {
+    const [r, g, b] = appliedColor;
+    await api("POST", "/api/set", { index: i, r, g, b });
+  } catch (e) {
+    state[i] = previousColor;
+    updateLedVisual(i);
+    setStatus(`Set failed: ${e.message}`);
+  }
+}
+
+function initGrid() {
   strip.innerHTML = "";
   let drawIndex = 0;
-
   for (let row = 0; row < GRID_ROWS; row++) {
     for (let col = 0; col < GRID_COLS; col++) {
       const i = gridToIndex(col, row);
       const el = document.createElement("button");
       el.type = "button";
       el.className = "led" + (i === selected ? " selected" : "");
-      el.style.background = rgbToCss(state[i]);
       el.title = `LED ${i + 1}`;
       el.textContent = String(i + 1);
       el.style.setProperty("--i", String(drawIndex));
-      const [r0, g0, b0] = state[i];
-      el.style.boxShadow = `0 0 0 1px rgba(255,255,255,0.12) inset, 0 8px 16px rgba(${r0}, ${g0}, ${b0}, 0.25)`;
-      el.addEventListener("click", async (ev) => {
-        if (!ev.shiftKey) selected = i;
-        const [r, g, b] = hexToRgb(color.value);
-        state[i] = [r, g, b];
-        render();
-        try {
-          await api("POST", "/api/set", { index: i, r, g, b });
-        } catch (e) {
-          setStatus(`Set failed: ${e.message}`);
-        }
+      el.addEventListener("click", (ev) => {
+        void handleLedClick(i, ev);
       });
+      ledEls[i] = el;
+      updateLedVisual(i);
       strip.appendChild(el);
       drawIndex += 1;
     }
   }
-
   renderSelected();
   syncSwatchSelection();
 }
@@ -189,13 +245,10 @@ bright.addEventListener("input", () => {
   brightVal.textContent = String(bright.value);
 });
 
-color.addEventListener("input", syncSwatchSelection);
-
 for (const swatch of swatches) {
   swatch.addEventListener("click", () => {
     if (!swatch.dataset.color) return;
-    color.value = swatch.dataset.color;
-    syncSwatchSelection();
+    applyColorSelection(swatch.dataset.color, true);
   });
 }
 
@@ -209,9 +262,9 @@ applyBright.addEventListener("click", async () => {
 });
 
 fillBtn.addEventListener("click", async () => {
-  const [r, g, b] = hexToRgb(color.value);
+  const [r, g, b] = getActiveColorRgb();
   state = state.map(() => [r, g, b]);
-  render();
+  updateAllLedVisuals();
   try {
     await api("POST", "/api/fill", { r, g, b });
   } catch (e) {
@@ -221,7 +274,7 @@ fillBtn.addEventListener("click", async () => {
 
 clearBtn.addEventListener("click", async () => {
   state = state.map(() => [0, 0, 0]);
-  render();
+  updateAllLedVisuals();
   try {
     await api("POST", "/api/clear");
   } catch (e) {
@@ -262,7 +315,12 @@ disconnectBtn.addEventListener("click", async () => {
 
 transportSelect.addEventListener("change", syncTransportUi);
 
-render();
+color.addEventListener("input", () => {
+  applyColorSelection(color.value, true);
+});
+
+applyColorSelection(color.value);
+initGrid();
 refreshPorts().catch(() => {});
 syncTransportUi();
 pollStatus().catch(() => {});

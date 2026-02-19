@@ -194,10 +194,6 @@ button:hover {
   --swatch-color: #ffffff;
 }
 
-.swatch[data-color="#0a0a0c"] {
-  --swatch-color: #0a0a0c;
-}
-
 .swatch[data-color="#f31892"] {
   --swatch-color: #f31892;
 }
