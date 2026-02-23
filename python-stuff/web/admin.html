@@ -1,0 +1,135 @@
+<!doctype html>
+<!--
+  LED Wall Controller admin UI.
+
+  Served by FastAPI (`python-stuff/server.py`) at `/admin`.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LED Wall Admin</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body data-app-mode="admin">
+    <main class="wrap">
+      <header class="header panel">
+        <div class="brand-lockup">
+          <img
+            class="brand-logo"
+            src="/static/assets/images/on-belay-logo.svg"
+            alt="ON BELAY Climbing"
+            decoding="async"
+          />
+          <div>
+            <h1>LED Wall Controller</h1>
+            <div class="mono">Admin controls</div>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a class="admin-link" href="/">Back to Dashboard</a>
+          <div class="status" id="status">Disconnected</div>
+        </div>
+      </header>
+
+      <section class="panel controls-panel">
+        <div class="row">
+          <label>
+            Transport
+            <select id="transportSelect">
+              <option value="serial">Serial (USB)</option>
+              <option value="wifi">Wi‑Fi (LAN)</option>
+            </select>
+          </label>
+          <label>
+            Serial Port
+            <select id="portSelect"></select>
+          </label>
+          <label>
+            Wi‑Fi Host
+            <input id="hostInput" type="text" value="" placeholder="ESP32 IP (e.g. 192.168.1.120)" />
+          </label>
+          <button id="refreshPorts">Refresh</button>
+          <button id="connectBtn">Connect</button>
+          <button id="disconnectBtn">Disconnect</button>
+        </div>
+
+        <div class="row">
+          <label>
+            Brightness
+            <input id="bright" type="range" min="0" max="255" value="32" />
+          </label>
+          <span class="mono" id="brightVal">32</span>
+          <button id="applyBright" type="button">Apply</button>
+        </div>
+
+        <div class="row">
+          <label>
+            Color
+            <input id="color" type="color" value="#ff0000" />
+          </label>
+          <div class="swatches">
+            <button type="button" class="swatch" data-color="#ffffff" title="White"></button>
+            <button type="button" class="swatch" data-color="#f31892" title="Pink"></button>
+            <button type="button" class="swatch" data-color="#11bde9" title="Cyan"></button>
+          </div>
+          <button id="fillBtn" type="button">Fill All</button>
+          <button id="clearBtn" type="button">Clear All</button>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <section class="panel wall-panel">
+          <div class="grid-top">
+            <h2>5 x 7 Grid (35 LEDs)</h2>
+            <span class="mono" id="selectedInfo">Selected LED: 1</span>
+          </div>
+          <div class="hint">
+            Serpentine wiring starts at bottom-right. Click any hold to set that
+            physical LED index. Click the same hold twice with the same color to turn it off.
+          </div>
+          <div class="grid-shell">
+            <div class="strip" id="strip"></div>
+          </div>
+        </section>
+
+        <aside class="panel routes-panel">
+          <div class="routes-head">
+            <h2>Saved Routes</h2>
+            <button id="reloadRoutesBtn" type="button">Reload</button>
+          </div>
+          <div class="hint">
+            Levels 4-7 contain 3 saved routes each. Or pick Freestyle for manual unsaved lighting.
+          </div>
+          <div class="route-modes">
+            <button id="freestyleModeBtn" type="button" class="route-mode">
+              Freestyle (manual lights)
+            </button>
+          </div>
+          <div class="route-folders" id="routeFolders"></div>
+
+          <div class="route-editor">
+            <label class="toggle-label">
+              <input id="editModeToggle" type="checkbox" />
+              Route editing mode (setter only)
+            </label>
+            <div class="editor-grid">
+              <label>
+                Editor PIN
+                <input id="routePin" type="password" inputmode="numeric" placeholder="Enter PIN" />
+              </label>
+              <label>
+                Route Name
+                <input id="routeName" type="text" maxlength="48" placeholder="Route name" />
+              </label>
+            </div>
+            <div class="mono" id="routeSelection">Selected route: none</div>
+            <button id="saveRouteBtn" type="button">Save current grid to selected route</button>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script type="module" src="/static/main.js"></script>
+  </body>
+</html>

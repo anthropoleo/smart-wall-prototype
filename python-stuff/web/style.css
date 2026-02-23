@@ -88,6 +88,39 @@ h1 {
   white-space: nowrap;
 }
 
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background:
+    linear-gradient(145deg, rgba(243, 24, 146, 0.12), rgba(17, 189, 233, 0.1)),
+    rgba(0, 0, 0, 0.3);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+
+.admin-link:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
 .panel {
   position: relative;
   isolation: isolate;
@@ -405,6 +438,16 @@ h2 {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
+.led.readonly {
+  cursor: default;
+}
+
+.led.readonly:hover {
+  transform: none;
+  filter: none;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
 .led.selected {
   outline: 2px solid var(--brand-cyan);
   outline-offset: 3px;
@@ -448,6 +491,16 @@ h2 {
   .status {
     width: 100%;
     justify-content: center;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: grid;
+    gap: 8px;
+  }
+
+  .admin-link {
+    width: 100%;
   }
 
   .workspace {

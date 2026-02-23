@@ -2,13 +2,15 @@
 
 ## Goal
 
-Build a mini “smart wall” prototype: an ESP32 drives a 35‑LED addressable wall (5x7), and a Python app provides an API + UI to control individual LEDs (future: hold routes, animations, timed problems).
+Build a mini climbing “smart wall”: an ESP32 drives a 35‑LED addressable wall (5x7), and a Python app provides an API + UI to control individual LEDs (future: hold routes, animations, timed problems).
 
 ## Architecture
 
 - **ESP32 firmware (PlatformIO / Arduino / FastLED)**: line-based command protocol exposed on both USB serial and HTTP (`/cmd`) while running as an AP.
 - **Python backend (FastAPI)**: talks to the ESP32 over serial or Wi‑Fi and exposes HTTP endpoints.
-- **Web UI**: served by the backend; lets you click LEDs, set colors/brightness, and choose transport (`serial` or `wifi`).
+- **Web UI**: served by the backend with two routes:
+  - Dashboard (`/`): route browsing/apply + wall preview
+  - Admin (`/admin`): transport connection, manual LED control, and route editing
 
 ## Key Files
 
@@ -16,7 +18,7 @@ Build a mini “smart wall” prototype: an ESP32 drives a 35‑LED addressable 
 - Python serial driver: `python-stuff/ledwall/serial_controller.py`
 - Python Wi‑Fi driver: `python-stuff/ledwall/wifi_controller.py`
 - API server: `python-stuff/server.py`
-- Web UI: `python-stuff/web/index.html`, `python-stuff/web/app.js`, `python-stuff/web/style.css`
+- Web UI: `python-stuff/web/index.html`, `python-stuff/web/admin.html`, `python-stuff/web/app.js`, `python-stuff/web/style.css`
 
 ## Device Command Protocol (ESP32)
 
@@ -48,19 +50,20 @@ All commands are ASCII lines. Responses are single lines starting with `OK` or `
   - `python3 -m venv .venv && source .venv/bin/activate`
   - `pip install -r requirements.txt`
   - `python3 -m uvicorn server:app --reload --port 8000`
-  - Open `http://127.0.0.1:8000/`
-  - In UI, choose:
+  - Open dashboard: `http://127.0.0.1:8000/`
+  - Open admin controls: `http://127.0.0.1:8000/admin`
+  - In admin UI, choose:
     - **Serial (USB)** + port, or
     - **Wi‑Fi (ESP32 AP)** + host `192.168.4.1`
 
 ## UI Notes
 
 - LEDs are displayed as a **5x7 grid** (35 total) using a right-to-left vertical serpentine map.
-- Clicking a LED sends `/api/set` with a 0-based physical index; UI labels are 1-based.
+- Dashboard (`/`) is read-only preview + route apply.
+- Admin (`/admin`) allows manual LED clicks and route editing.
+- Clicking an LED in admin sends `/api/set` with a 0-based physical index; UI labels are 1-based.
 
 ## Next Steps (Roadmap)
 
-- Add “routes”: save named patterns (which holds/LEDs light up).
-- Add timers / countdowns / difficulty presets.
-- Add AP credential configuration + stronger auth for safer deployments.
-- Consider ESP32 WebSocket push updates for lower-latency UI sync.
+- Add freestyle mode where people create their own route with own colours. This doesn't need a "save" feature
+- Add pin to access admin dashboard

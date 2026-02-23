@@ -15,14 +15,16 @@ ESP32 + FastAPI + Web UI controller for a 35-LED climbing wall prototype.
     - HTTP on ESP32 LAN IP (`GET /cmd?q=<COMMAND>`)
 - **Backend (`server.py`)**
   - Serves UI and forwards API requests to either serial or Wi‑Fi transport.
+  - UI routes:
+    - Dashboard: `/`
+    - Admin controls: `/admin`
   - Persists route slots in `python-stuff/data/routes.json`.
   - Transport drivers:
     - `ledwall/serial_controller.py`
     - `ledwall/wifi_controller.py`
 - **Frontend (`web/`)**
-  - 5x7 clickable grid with serpentine index mapping.
-  - Saved-route panel: Levels 4-7, 3 slots per level.
-  - Transport selector: `Serial (USB)` or `Wi‑Fi (LAN)`.
+  - Dashboard (`/`): route browsing/apply + 5x7 wall preview.
+  - Admin (`/admin`): full controls, route editing, and transport selector.
 
 ## ESP32 Wi-Fi (station mode)
 
@@ -54,7 +56,9 @@ pip install -r requirements.txt
 python3 -m uvicorn server:app --reload --port 8000
 ```
 
-Open: `http://127.0.0.1:8000/`
+Open:
+- Dashboard: `http://127.0.0.1:8000/`
+- Admin: `http://127.0.0.1:8000/admin`
 
 ## Flash firmware
 

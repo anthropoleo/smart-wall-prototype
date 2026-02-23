@@ -2,7 +2,8 @@
 FastAPI backend for the LED wall prototype.
 
 Serves:
-- A small static web UI under `/` (files in `python-stuff/web/`)
+- A dashboard UI under `/` and admin UI under `/admin`
+  (files in `python-stuff/web/`)
 - JSON API endpoints under `/api/*` that translate browser actions into LED
   commands sent to the ESP32 (via serial or Wi-Fi transport)
 
@@ -125,8 +126,13 @@ def _http_error(e: Exception, status_code: int = 400, hint: str | None = None) -
 
 
 @app.get("/")
-def index():
+def dashboard():
     return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/admin")
+def admin():
+    return FileResponse(WEB_DIR / "admin.html")
 
 
 @app.get("/api/ports")
