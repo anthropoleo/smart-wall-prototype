@@ -6,9 +6,13 @@ import { api } from "./api.js";
 import { createGridController, NUM_LEDS } from "./grid.js";
 import { createRoutesController } from "./routes.js";
 import { createAdminControlsController } from "./admin-controls.js";
+import { createFreestyleController } from "./freestyle.js";
 
-const appMode = document.body?.dataset?.appMode === "dashboard" ? "dashboard" : "admin";
+const appMode = ["dashboard", "admin", "freestyle"].includes(document.body?.dataset?.appMode || "")
+  ? document.body.dataset.appMode
+  : "dashboard";
 const isAdmin = appMode === "admin";
+const isFreestyle = appMode === "freestyle";
 
 const statusEl = document.getElementById("status");
 const transportSelect = document.getElementById("transportSelect");
@@ -32,13 +36,13 @@ const swatches = Array.from(document.querySelectorAll(".swatch"));
 
 const routeFolders = document.getElementById("routeFolders");
 const reloadRoutesBtn = document.getElementById("reloadRoutesBtn");
-const freestyleModeBtn = document.getElementById("freestyleModeBtn");
-const freestyleTools = document.getElementById("freestyleTools");
 const editModeToggle = document.getElementById("editModeToggle");
 const routePinInput = document.getElementById("routePin");
 const routeNameInput = document.getElementById("routeName");
 const routeSelection = document.getElementById("routeSelection");
 const saveRouteBtn = document.getElementById("saveRouteBtn");
+const freestyleConnection = document.getElementById("freestyleConnection");
+const freestyleClearBtn = document.getElementById("freestyleClearBtn");
 
 function setStatus(text) {
   if (statusEl) {
@@ -78,57 +82,70 @@ const grid = createGridController({
 
 grid.init();
 
-const routes = createRoutesController({
-  isAdmin,
-  api,
-  grid,
-  setStatus,
-  onRouteLedCount: warnRouteLedCount,
-  routeFoldersEl: routeFolders,
-  reloadRoutesBtn,
-  freestyleModeBtn,
-  freestyleToolsEl: freestyleTools,
-  onFreestyleModeChange: (enabled) => {
-    grid.setInteractive(isAdmin || enabled);
-  },
-  editModeToggle,
-  routePinInput,
-  routeNameInput,
-  routeSelectionEl: routeSelection,
-  saveRouteBtn,
-});
+if (!isFreestyle) {
+  const routes = createRoutesController({
+    isAdmin,
+    api,
+    grid,
+    setStatus,
+    onRouteLedCount: warnRouteLedCount,
+    routeFoldersEl: routeFolders,
+    reloadRoutesBtn,
+    editModeToggle,
+    routePinInput,
+    routeNameInput,
+    routeSelectionEl: routeSelection,
+    saveRouteBtn,
+  });
 
-routes.init();
-
-const adminControls = createAdminControlsController({
-  api,
-  grid,
-  setStatus,
-  onDeviceLedCount: warnDeviceLedCount,
-  transportSelect,
-  portSelect,
-  hostInput,
-  refreshPortsBtn,
-  connectBtn,
-  disconnectBtn,
-  bright,
-  brightVal,
-  applyBright,
-  fillBtn,
-  clearBtn,
-});
-
-adminControls.init();
-
-if (isAdmin) {
-  adminControls.refreshPorts().catch(() => {});
+  routes.init();
+  routes.loadRoutes().catch((error) => {
+    setStatus(`Route load failed: ${error.message}`);
+  });
 }
 
-routes.loadRoutes().catch((error) => {
-  setStatus(`Route load failed: ${error.message}`);
-});
+if (isFreestyle) {
+  const freestyle = createFreestyleController({
+    api,
+    grid,
+    setStatus,
+    onDeviceLedCount: warnDeviceLedCount,
+    connectionEl: freestyleConnection,
+    clearBtn: freestyleClearBtn,
+  });
 
-adminControls.pollStatus().catch(() => {});
-setInterval(() => {
-  void adminControls.pollStatus();
-}, 2500);
+  freestyle.init();
+  freestyle.pollStatus().catch(() => {});
+  setInterval(() => {
+    void freestyle.pollStatus();
+  }, 2500);
+} else {
+  const adminControls = createAdminControlsController({
+    api,
+    grid,
+    setStatus,
+    onDeviceLedCount: warnDeviceLedCount,
+    transportSelect,
+    portSelect,
+    hostInput,
+    refreshPortsBtn,
+    connectBtn,
+    disconnectBtn,
+    bright,
+    brightVal,
+    applyBright,
+    fillBtn,
+    clearBtn,
+  });
+
+  adminControls.init();
+
+  if (isAdmin) {
+    adminControls.refreshPorts().catch(() => {});
+  }
+
+  adminControls.pollStatus().catch(() => {});
+  setInterval(() => {
+    void adminControls.pollStatus();
+  }, 2500);
+}

@@ -2,7 +2,8 @@
 FastAPI backend for the LED wall prototype.
 
 Serves:
-- A dashboard UI under `/` and admin UI under `/admin`
+- A dashboard UI under `/`, admin UI under `/admin`, and freestyle UI under
+  `/freestyle`
   (files in `python-stuff/web/`)
 - JSON API endpoints under `/api/*` that translate browser actions into LED
   commands sent to the ESP32 (via serial or Wi-Fi transport)
@@ -14,6 +15,7 @@ USB serial port or LAN Wi-Fi.
 import os
 import logging
 import sys
+import threading
 from pathlib import Path
 from typing import Literal
 
@@ -48,6 +50,7 @@ route_editor_pin = os.getenv("LED_ROUTE_EDITOR_PIN", "2468")
 ctrl = serial_ctrl
 transport: Literal["serial", "wifi"] = "serial"
 last_info: dict | None = None
+device_lock = threading.Lock()
 CHANNEL_ORDERS: dict[str, tuple[int, int, int]] = {
     "rgb": (0, 1, 2),
     "rbg": (0, 2, 1),
@@ -135,6 +138,11 @@ def admin():
     return FileResponse(WEB_DIR / "admin.html")
 
 
+@app.get("/freestyle")
+def freestyle():
+    return FileResponse(WEB_DIR / "freestyle.html")
+
+
 @app.get("/api/ports")
 def ports():
     ports = list(list_ports.comports())
@@ -166,28 +174,29 @@ def ports():
 def connect(req: ConnectRequest):
     global ctrl, transport, last_info
     try:
-        target = req.transport
-        target_ctrl = wifi_ctrl if target == "wifi" else serial_ctrl
-        if target == "wifi":
-            if not req.host:
-                raise ValueError("host is required for wifi transport")
-            serial_ctrl.close()
-            endpoint = target_ctrl.connect(req.host)
-        else:
-            wifi_ctrl.close()
-            endpoint = target_ctrl.connect(req.port)
+        with device_lock:
+            target = req.transport
+            target_ctrl = wifi_ctrl if target == "wifi" else serial_ctrl
+            if target == "wifi":
+                if not req.host:
+                    raise ValueError("host is required for wifi transport")
+                serial_ctrl.close()
+                endpoint = target_ctrl.connect(req.host)
+            else:
+                wifi_ctrl.close()
+                endpoint = target_ctrl.connect(req.port)
 
-        ctrl = target_ctrl
-        transport = target
+            ctrl = target_ctrl
+            transport = target
 
-        warning = None
-        try:
-            info = ctrl.info()
-            last_info = info.__dict__
-        except Exception as e:
-            # Don’t fail connect if INFO isn’t supported or serial is flaky yet.
-            last_info = None
-            warning = f"Connected, but INFO failed: {e.__class__.__name__}: {e}"
+            warning = None
+            try:
+                info = ctrl.info()
+                last_info = info.__dict__
+            except Exception as e:
+                # Don’t fail connect if INFO isn’t supported or serial is flaky yet.
+                last_info = None
+                warning = f"Connected, but INFO failed: {e.__class__.__name__}: {e}"
         return {
             "ok": True,
             "transport": transport,
@@ -206,11 +215,12 @@ def connect(req: ConnectRequest):
 @app.post("/api/disconnect")
 def disconnect():
     global ctrl, transport, last_info
-    serial_ctrl.close()
-    wifi_ctrl.close()
-    ctrl = serial_ctrl
-    transport = "serial"
-    last_info = None
+    with device_lock:
+        serial_ctrl.close()
+        wifi_ctrl.close()
+        ctrl = serial_ctrl
+        transport = "serial"
+        last_info = None
     return {"ok": True}
 
 
@@ -227,9 +237,10 @@ def status():
 @app.get("/api/info")
 def info():
     global last_info
-    _require_connected()
     try:
-        last_info = ctrl.info().__dict__
+        with device_lock:
+            _require_connected()
+            last_info = ctrl.info().__dict__
         return {"ok": True, "info": last_info}
     except Exception as e:
         raise _http_error(e, status_code=400)
@@ -275,10 +286,11 @@ def get_route(level: int, slot: int):
 
 @app.post("/api/routes/{level}/{slot}/apply")
 def apply_route(level: int, slot: int):
-    _require_connected()
     try:
         route = route_store.get_route(level=level, slot=slot)
-        ctrl.set_frame(_device_frame(route["frame"]))
+        with device_lock:
+            _require_connected()
+            ctrl.set_frame(_device_frame(route["frame"]))
         return {"ok": True, "route": route}
     except Exception as e:
         raise _http_error(e, status_code=400)
@@ -299,13 +311,14 @@ def save_route(level: int, slot: int, req: SaveRouteRequest):
 @app.post("/api/brightness")
 def set_brightness(req: BrightnessRequest):
     global last_info
-    _require_connected()
     try:
-        ctrl.brightness(req.value)
-        if isinstance(last_info, dict):
-            last_info["brightness"] = int(req.value)
-        else:
-            last_info = {"brightness": int(req.value)}
+        with device_lock:
+            _require_connected()
+            ctrl.brightness(req.value)
+            if isinstance(last_info, dict):
+                last_info["brightness"] = int(req.value)
+            else:
+                last_info = {"brightness": int(req.value)}
         return {"ok": True, "info": last_info}
     except SerialNotConnectedError as e:
         raise _http_error(e, status_code=409)
@@ -317,9 +330,10 @@ def set_brightness(req: BrightnessRequest):
 
 @app.post("/api/clear")
 def clear():
-    _require_connected()
     try:
-        ctrl.clear()
+        with device_lock:
+            _require_connected()
+            ctrl.clear()
         return {"ok": True}
     except Exception as e:
         raise _http_error(e, status_code=400)
@@ -327,10 +341,11 @@ def clear():
 
 @app.post("/api/fill")
 def fill(req: FillRequest):
-    _require_connected()
     try:
         r, g, b = _device_rgb(req.r, req.g, req.b)
-        ctrl.fill(r, g, b)
+        with device_lock:
+            _require_connected()
+            ctrl.fill(r, g, b)
         return {"ok": True}
     except Exception as e:
         raise _http_error(e, status_code=400)
@@ -338,10 +353,11 @@ def fill(req: FillRequest):
 
 @app.post("/api/set")
 def set_pixel(req: SetRequest):
-    _require_connected()
     try:
         r, g, b = _device_rgb(req.r, req.g, req.b)
-        ctrl.set_pixel(req.index, r, g, b, show=True)
+        with device_lock:
+            _require_connected()
+            ctrl.set_pixel(req.index, r, g, b, show=True)
         return {"ok": True}
     except Exception as e:
         raise _http_error(e, status_code=400)
@@ -349,9 +365,10 @@ def set_pixel(req: SetRequest):
 
 @app.post("/api/frame")
 def set_frame(req: FrameRequest):
-    _require_connected()
     try:
-        ctrl.set_frame(_device_frame(req.colors))
+        with device_lock:
+            _require_connected()
+            ctrl.set_frame(_device_frame(req.colors))
         return {"ok": True}
     except Exception as e:
         raise _http_error(e, status_code=400)

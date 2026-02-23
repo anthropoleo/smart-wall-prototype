@@ -10,9 +10,6 @@ export function createRoutesController({
   onRouteLedCount,
   routeFoldersEl,
   reloadRoutesBtn,
-  freestyleModeBtn,
-  freestyleToolsEl,
-  onFreestyleModeChange,
   editModeToggle,
   routePinInput,
   routeNameInput,
@@ -20,20 +17,11 @@ export function createRoutesController({
   saveRouteBtn,
 }) {
   let selectedRoute = null;
-  let freestyleMode = false;
+  let routeApplyInFlight = false;
   const routeBtnByKey = new Map();
 
   function routeKey(level, slot) {
     return `${level}:${slot}`;
-  }
-
-  function syncFreestyleUi() {
-    if (freestyleToolsEl) {
-      freestyleToolsEl.hidden = !freestyleMode;
-    }
-    if (typeof onFreestyleModeChange === "function") {
-      onFreestyleModeChange(freestyleMode);
-    }
   }
 
   function syncRouteEditorUi() {
@@ -43,11 +31,15 @@ export function createRoutesController({
     if (saveRouteBtn) saveRouteBtn.disabled = !canEditSelectedRoute;
   }
 
+  function setRouteButtonsDisabled(disabled) {
+    for (const button of routeBtnByKey.values()) {
+      button.disabled = !!disabled;
+    }
+  }
+
   function refreshRouteSelectionText() {
     if (routeSelectionEl) {
-      if (freestyleMode) {
-        routeSelectionEl.textContent = "Selected mode: Freestyle (manual lights, unsaved)";
-      } else if (!selectedRoute) {
+      if (!selectedRoute) {
         routeSelectionEl.textContent = "Selected route: none";
       } else {
         routeSelectionEl.textContent =
@@ -59,16 +51,9 @@ export function createRoutesController({
     for (const [key, button] of routeBtnByKey.entries()) {
       button.classList.toggle("active", key === activeKey);
     }
-
-    if (freestyleModeBtn) {
-      freestyleModeBtn.classList.toggle("active", freestyleMode);
-    }
-
-    syncFreestyleUi();
   }
 
   function setSelectedRoute(level, slot, name = "") {
-    freestyleMode = false;
     selectedRoute = { level, slot };
     if (routeNameInput && typeof name === "string" && name.trim()) {
       routeNameInput.value = name.trim();
@@ -77,33 +62,14 @@ export function createRoutesController({
     syncRouteEditorUi();
   }
 
-  function selectFreestyleMode() {
-    freestyleMode = true;
-    selectedRoute = null;
-    if (routeNameInput) {
-      routeNameInput.value = "";
-    }
-    refreshRouteSelectionText();
-    syncRouteEditorUi();
-  }
-
-  async function enableFreestyleMode() {
-    selectFreestyleMode();
-    grid.clearAll();
-
-    const freestyleMessage = freestyleToolsEl
-      ? "Freestyle mode enabled. Pick white, blue, or pink, then click holds to light them."
-      : "Freestyle mode enabled. Click holds to toggle them manually.";
-
-    try {
-      await api("POST", "/api/clear");
-      setStatus(freestyleMessage);
-    } catch (error) {
-      setStatus(`Freestyle mode enabled, but wall clear failed: ${error.message}`);
-    }
-  }
-
   async function applyRoute(level, slot, fallbackName) {
+    if (routeApplyInFlight) {
+      setStatus("Please wait for the current route apply to finish.");
+      return;
+    }
+
+    routeApplyInFlight = true;
+    setRouteButtonsDisabled(true);
     try {
       const routePayload = await api("GET", `/api/routes/${level}/${slot}`);
       const route = routePayload.route;
@@ -117,6 +83,7 @@ export function createRoutesController({
       setSelectedRoute(level, slot, resolvedName);
 
       try {
+        setStatus(`Applying Level ${level} | ${resolvedName}...`);
         await api("POST", `/api/routes/${level}/${slot}/apply`);
         setStatus(`Applied Level ${level} | ${resolvedName}`);
       } catch (error) {
@@ -124,6 +91,9 @@ export function createRoutesController({
       }
     } catch (error) {
       setStatus(`Route load failed: ${error.message}`);
+    } finally {
+      routeApplyInFlight = false;
+      setRouteButtonsDisabled(false);
     }
   }
 
@@ -149,7 +119,7 @@ export function createRoutesController({
 
       const folder = document.createElement("details");
       folder.className = "level-folder";
-      if (selectedRoute && !freestyleMode) {
+      if (selectedRoute) {
         folder.open = selectedRoute.level === level;
       } else {
         folder.open = level === 4;
@@ -168,6 +138,7 @@ export function createRoutesController({
         const button = document.createElement("button");
         button.type = "button";
         button.className = "route-item";
+        button.disabled = routeApplyInFlight;
         button.textContent = `${slot}. ${name}`;
         button.addEventListener("click", () => {
           void applyRoute(level, slot, name);
@@ -252,12 +223,6 @@ export function createRoutesController({
         } catch (error) {
           setStatus(`Route reload failed: ${error.message}`);
         }
-      });
-    }
-
-    if (freestyleModeBtn) {
-      freestyleModeBtn.addEventListener("click", async () => {
-        await enableFreestyleMode();
       });
     }
 

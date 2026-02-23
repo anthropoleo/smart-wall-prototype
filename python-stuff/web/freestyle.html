@@ -1,18 +1,17 @@
 <!doctype html>
 <!--
-  LED Wall Controller dashboard UI.
+  LED Wall freestyle UI.
 
-  Served by FastAPI (`python-stuff/server.py`) at `/`.
-  Admin controls are available at `/admin`.
+  Served by FastAPI (`python-stuff/server.py`) at `/freestyle`.
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LED Wall Dashboard</title>
+    <title>LED Wall Freestyle</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
-  <body data-app-mode="dashboard">
+  <body data-app-mode="freestyle">
     <main class="wrap">
       <header class="header panel">
         <div class="brand-lockup">
@@ -23,13 +22,14 @@
             decoding="async"
           />
           <div>
-            <h1>LED Wall Dashboard</h1>
+            <h1>LED Wall Freestyle</h1>
+            <div class="mono">Unsaved manual climbing holds</div>
           </div>
         </div>
         <div class="header-actions">
-          <a class="admin-link" href="/freestyle">Freestyle</a>
+          <a class="admin-link" href="/">Dashboard</a>
           <a class="admin-link" href="/admin">Admin Controls</a>
-          <div class="status" id="status">Disconnected</div>
+          <div class="status" id="status">Checking connection...</div>
         </div>
       </header>
 
@@ -40,7 +40,7 @@
             <span class="mono" id="selectedInfo">Selected LED: 1</span>
           </div>
           <div class="hint">
-            Select a saved route to preview and apply it.
+            Pick white, blue, or pink, then tap holds to toggle them. Freestyle routes are not saved.
           </div>
           <div class="grid-shell">
             <div class="strip" id="strip"></div>
@@ -49,14 +49,18 @@
 
         <aside class="panel routes-panel">
           <div class="routes-head">
-            <h2>Saved Routes</h2>
-            <button id="reloadRoutesBtn" type="button">Reload</button>
+            <h2>Freestyle Controls</h2>
           </div>
-          <div class="hint">
-            Levels 4-7 contain 3 saved routes each.
+          <div class="freestyle-tools">
+            <div class="mono" id="freestyleConnection">Checking connection...</div>
+            <input id="color" type="hidden" value="#ffffff" />
+            <div class="swatches">
+              <button type="button" class="swatch" data-color="#ffffff" title="White"></button>
+              <button type="button" class="swatch" data-color="#11bde9" title="Blue"></button>
+              <button type="button" class="swatch" data-color="#f31892" title="Pink"></button>
+            </div>
+            <button id="freestyleClearBtn" type="button">Clear Wall</button>
           </div>
-          <div class="route-folders" id="routeFolders"></div>
-          <div class="mono" id="routeSelection">Selected route: none</div>
         </aside>
       </div>
     </main>
