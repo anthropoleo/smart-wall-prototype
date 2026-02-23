@@ -34,6 +34,7 @@
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GBR
 #define DEFAULT_BRIGHTNESS 32
+#define MAX_COMMAND_CHARS 8192
 #define WIFI_CONNECT_TIMEOUT_MS 15000UL
 #define WIFI_RETRY_INTERVAL_MS 5000UL
 
@@ -50,6 +51,40 @@ int clamp8(int v) {
   if (v < 0) return 0;
   if (v > 255) return 255;
   return v;
+}
+
+int hexNibble(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+  if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+  return -1;
+}
+
+bool parseHexByte(const String& s, int offset, uint8_t& out) {
+  if (offset < 0 || offset + 1 >= s.length()) return false;
+  int hi = hexNibble(s[offset]);
+  int lo = hexNibble(s[offset + 1]);
+  if (hi < 0 || lo < 0) return false;
+  out = (uint8_t)((hi << 4) | lo);
+  return true;
+}
+
+bool applyHexFrame(const String& hex) {
+  if (hex.length() != NUM_LEDS * 6) {
+    return false;
+  }
+
+  for (int i = 0; i < NUM_LEDS; i++) {
+    const int o = i * 6;
+    uint8_t r, g, b;
+    if (!parseHexByte(hex, o, r) || !parseHexByte(hex, o + 2, g) || !parseHexByte(hex, o + 4, b)) {
+      return false;
+    }
+    leds[i] = CRGB(r, g, b);
+  }
+
+  FastLED.show();
+  return true;
 }
 
 void replyErr(const String& msg) {
@@ -117,6 +152,14 @@ String runCommand(const String& raw) {
     FastLED.clear(true);
     return "OK";
   }
+  else if (cmd.startsWith("FRAME ")) {
+    String payload = cmd.substring(6);
+    payload.trim();
+    if (applyHexFrame(payload)) {
+      return "OK";
+    }
+    return "ERR usage: FRAME <hex rgb payload of length NUM_LEDS*6>";
+  }
 
   return "ERR unknown command";
 }
@@ -130,7 +173,7 @@ bool readLine(String& out) {
       return true;
     }
     out += c;
-    if (out.length() > 200) {
+    if (out.length() > MAX_COMMAND_CHARS) {
       out = "";
       replyErr("line too long");
     }
@@ -192,6 +235,7 @@ void maintainWifiConnection() {
 void setup() {
   Serial.begin(115200);
   delay(2000);  // Increased delay to ensure ESP32 is fully ready
+  line.reserve(MAX_COMMAND_CHARS + 8);
 
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.setBrightness(DEFAULT_BRIGHTNESS);
@@ -218,6 +262,24 @@ void setup() {
     String response = runCommand(q);
     int code = response.startsWith("OK") ? 200 : 400;
     server.send(code, "text/plain", response);
+  });
+
+  server.on("/frame", HTTP_POST, []() {
+    if (!server.hasArg("plain")) {
+      server.send(400, "text/plain", "ERR missing body");
+      return;
+    }
+
+    String payload = server.arg("plain");
+    payload.trim();
+    bool applied = applyHexFrame(payload);
+
+    if (applied) {
+      server.send(200, "text/plain", "OK");
+      return;
+    }
+
+    server.send(400, "text/plain", "ERR invalid frame payload");
   });
 
   if (wifiConnected) {

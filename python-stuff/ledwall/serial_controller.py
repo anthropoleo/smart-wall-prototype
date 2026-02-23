@@ -20,6 +20,7 @@ import sys
 
 
 BAUD = 115200
+_FRAME_FAST_FALLBACK_THRESHOLD = 16
 
 
 class SerialNotConnectedError(RuntimeError):
@@ -84,6 +85,7 @@ class LedSerialController:
         self._lock = threading.Lock()
         self._last_non_ok: str | None = None
         self._frame_cache: list[tuple[int, int, int]] | None = None
+        self._supports_frame_cmd = True
 
     @property
     def port(self) -> str | None:
@@ -110,6 +112,7 @@ class LedSerialController:
                     pass
             self._ser = ser
             self._frame_cache = None
+            self._supports_frame_cmd = True
 
         # Best-effort handshake.
         self._wait_for_ready(timeout_s=2.0)
@@ -126,6 +129,7 @@ class LedSerialController:
             self._ser.close()
             self._ser = None
             self._frame_cache = None
+            self._supports_frame_cmd = True
 
     def _require(self) -> serial.Serial:
         if not self._ser:
@@ -196,6 +200,9 @@ class LedSerialController:
                 detail.append(f"raw_tail={raw_tail!r}")
             extra = (" (" + ", ".join(detail) + ")") if detail else ""
             raise TimeoutError(f"No OK/ERR response for {cmd!r}{extra}")
+
+    def _frame_hex(self, colors: list[tuple[int, int, int]]) -> str:
+        return "".join(f"{r:02X}{g:02X}{b:02X}" for (r, g, b) in colors)
 
     def ping(self) -> None:
         resp = self.send("PING")
@@ -269,6 +276,17 @@ class LedSerialController:
 
         if not changed_indices:
             return
+
+        if self._supports_frame_cmd and len(changed_indices) >= _FRAME_FAST_FALLBACK_THRESHOLD:
+            try:
+                resp = self.send(f"FRAME {self._frame_hex(desired)}", timeout_s=8.0)
+                if not resp.startswith("OK"):
+                    raise RuntimeError(resp)
+                self._frame_cache = list(desired)
+                return
+            except Exception:
+                # Older firmware may not support FRAME; permanently fall back after first failure.
+                self._supports_frame_cmd = False
 
         try:
             for i in changed_indices:

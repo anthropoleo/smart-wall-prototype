@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote_plus
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
 class WifiNotConnectedError(RuntimeError):
@@ -42,6 +42,7 @@ class LedWifiController:
         self._retry_delay_s = max(0.0, float(retry_delay_s))
         self._lock = threading.Lock()
         self._frame_cache: list[tuple[int, int, int]] | None = None
+        self._supports_fast_frame = True
 
     @property
     def port(self) -> str | None:
@@ -55,6 +56,7 @@ class LedWifiController:
         prev = self._host
         self._host = chosen
         self._frame_cache = None
+        self._supports_fast_frame = True
         try:
             self.ping()
         except Exception:
@@ -66,6 +68,7 @@ class LedWifiController:
     def close(self) -> None:
         self._host = ""
         self._frame_cache = None
+        self._supports_fast_frame = True
 
     def _require(self) -> str:
         if not self._host:
@@ -75,6 +78,10 @@ class LedWifiController:
     def _url(self, cmd: str) -> str:
         host = self._require()
         return f"http://{host}/cmd?q={quote_plus(cmd.strip())}"
+
+    def _frame_url(self) -> str:
+        host = self._require()
+        return f"http://{host}/frame"
 
     def _set_cached_pixel(self, index: int, r: int, g: int, b: int) -> None:
         if self._frame_cache is None:
@@ -115,6 +122,42 @@ class LedWifiController:
         if last_error is not None:
             raise last_error
         raise RuntimeError(f"Failed to send command {cmd!r}")
+
+    def _send_frame_fast(self, colors: list[tuple[int, int, int]]) -> str:
+        payload = "".join(f"{int(r) & 0xFF:02X}{int(g) & 0xFF:02X}{int(b) & 0xFF:02X}" for r, g, b in colors)
+
+        req = Request(
+            self._frame_url(),
+            data=payload.encode("ascii"),
+            method="POST",
+            headers={"Content-Type": "text/plain"},
+        )
+        attempts = self._retries + 1
+        last_error: Exception | None = None
+
+        with self._lock:
+            for attempt in range(attempts):
+                try:
+                    with urlopen(req, timeout=self._timeout_s) as response:
+                        body = response.read().decode("utf-8", errors="replace").strip()
+                    return body or "OK"
+                except HTTPError as e:
+                    body = e.read().decode("utf-8", errors="replace").strip()
+                    if body:
+                        return body
+                    last_error = RuntimeError(f"HTTP {e.code} for frame update")
+                except URLError as e:
+                    reason = getattr(e, "reason", e)
+                    last_error = RuntimeError(f"Failed to reach ESP32 at {self._host}: {reason}")
+                except TimeoutError:
+                    last_error = RuntimeError("Timed out waiting for ESP32 frame response")
+
+                if attempt + 1 < attempts:
+                    time.sleep(self._retry_delay_s)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Failed to send frame")
 
     def ping(self) -> None:
         resp = self.send("PING")
@@ -187,6 +230,17 @@ class LedWifiController:
 
         if not changed_indices:
             return
+
+        if self._supports_fast_frame:
+            try:
+                resp = self._send_frame_fast(desired)
+                if not resp.startswith("OK"):
+                    raise RuntimeError(resp)
+                self._frame_cache = list(desired)
+                return
+            except Exception:
+                # Older firmware may not provide /frame; disable fast-path after first failure.
+                self._supports_fast_frame = False
 
         try:
             for i in changed_indices:
