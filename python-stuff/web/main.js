@@ -44,6 +44,46 @@ const saveRouteBtn = document.getElementById("saveRouteBtn");
 const freestyleConnection = document.getElementById("freestyleConnection");
 const freestyleClearBtn = document.getElementById("freestyleClearBtn");
 
+function startVisiblePolling(pollFn, intervalMs) {
+  let timerId = null;
+  let inFlight = false;
+
+  async function tick() {
+    if (document.hidden || inFlight) return;
+    inFlight = true;
+    try {
+      await pollFn();
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  function stop() {
+    if (timerId === null) return;
+    clearInterval(timerId);
+    timerId = null;
+  }
+
+  function start() {
+    if (timerId !== null) return;
+    timerId = setInterval(() => {
+      void tick();
+    }, intervalMs);
+    void tick();
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      stop();
+      return;
+    }
+    start();
+  }
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  start();
+}
+
 function setStatus(text) {
   if (statusEl) {
     statusEl.textContent = text;
@@ -115,10 +155,7 @@ if (isFreestyle) {
   });
 
   freestyle.init();
-  freestyle.pollStatus().catch(() => {});
-  setInterval(() => {
-    void freestyle.pollStatus();
-  }, 2500);
+  startVisiblePolling(() => freestyle.pollStatus(), 2500);
 } else {
   const adminControls = createAdminControlsController({
     api,
@@ -142,10 +179,8 @@ if (isFreestyle) {
 
   if (isAdmin) {
     adminControls.refreshPorts().catch(() => {});
+    startVisiblePolling(() => adminControls.pollStatus(), 2500);
+  } else {
+    adminControls.pollStatus().catch(() => {});
   }
-
-  adminControls.pollStatus().catch(() => {});
-  setInterval(() => {
-    void adminControls.pollStatus();
-  }, 2500);
 }

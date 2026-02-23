@@ -71,23 +71,41 @@ export function createRoutesController({
     routeApplyInFlight = true;
     setRouteButtonsDisabled(true);
     try {
-      const routePayload = await api("GET", `/api/routes/${level}/${slot}`);
-      const route = routePayload.route;
+      const defaultName = fallbackName || `Route ${slot}`;
+      setStatus(`Applying Level ${level} | ${defaultName}...`);
+
+      let route = null;
+      let applyError = null;
+      try {
+        const payload = await api("POST", `/api/routes/${level}/${slot}/apply`);
+        route = payload.route || null;
+      } catch (error) {
+        applyError = error;
+        try {
+          const payload = await api("GET", `/api/routes/${level}/${slot}`);
+          route = payload.route || null;
+        } catch (previewError) {
+          setStatus(`Route apply failed: ${error.message}. Preview unavailable: ${previewError.message}`);
+          return;
+        }
+      }
 
       if (route?.frame && !grid.applyFrameToState(route.frame)) {
-        setStatus("Route frame shape mismatch for this wall layout.");
+        if (applyError) {
+          setStatus(`Route apply failed: ${applyError.message}`);
+        } else {
+          setStatus("Applied route on device, but preview frame shape mismatch for this wall layout.");
+        }
         return;
       }
 
-      const resolvedName = route?.name || fallbackName || `Route ${slot}`;
+      const resolvedName = route?.name || defaultName;
       setSelectedRoute(level, slot, resolvedName);
 
-      try {
-        setStatus(`Applying Level ${level} | ${resolvedName}...`);
-        await api("POST", `/api/routes/${level}/${slot}/apply`);
+      if (applyError) {
+        setStatus(`Route preview loaded, but device apply failed: ${applyError.message}`);
+      } else {
         setStatus(`Applied Level ${level} | ${resolvedName}`);
-      } catch (error) {
-        setStatus(`Route preview loaded, but device apply failed: ${error.message}`);
       }
     } catch (error) {
       setStatus(`Route load failed: ${error.message}`);

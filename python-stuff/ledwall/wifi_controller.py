@@ -41,6 +41,7 @@ class LedWifiController:
         self._retries = max(0, int(retries))
         self._retry_delay_s = max(0.0, float(retry_delay_s))
         self._lock = threading.Lock()
+        self._frame_cache: list[tuple[int, int, int]] | None = None
 
     @property
     def port(self) -> str | None:
@@ -53,15 +54,18 @@ class LedWifiController:
 
         prev = self._host
         self._host = chosen
+        self._frame_cache = None
         try:
             self.ping()
         except Exception:
             self._host = prev
+            self._frame_cache = None
             raise
         return chosen
 
     def close(self) -> None:
         self._host = ""
+        self._frame_cache = None
 
     def _require(self) -> str:
         if not self._host:
@@ -71,6 +75,14 @@ class LedWifiController:
     def _url(self, cmd: str) -> str:
         host = self._require()
         return f"http://{host}/cmd?q={quote_plus(cmd.strip())}"
+
+    def _set_cached_pixel(self, index: int, r: int, g: int, b: int) -> None:
+        if self._frame_cache is None:
+            return
+        if index < 0 or index >= len(self._frame_cache):
+            self._frame_cache = None
+            return
+        self._frame_cache[index] = (int(r), int(g), int(b))
 
     def send(self, cmd: str) -> str:
         cmd = cmd.strip()
@@ -143,17 +155,23 @@ class LedWifiController:
         resp = self.send("CLEAR")
         if not resp.startswith("OK"):
             raise RuntimeError(resp)
+        if self._frame_cache is not None:
+            self._frame_cache = [(0, 0, 0) for _ in self._frame_cache]
 
     def fill(self, r: int, g: int, b: int) -> None:
         resp = self.send(f"FILL {int(r)} {int(g)} {int(b)}")
         if not resp.startswith("OK"):
             raise RuntimeError(resp)
+        if self._frame_cache is not None:
+            color = (int(r), int(g), int(b))
+            self._frame_cache = [color for _ in self._frame_cache]
 
     def set_pixel(self, index: int, r: int, g: int, b: int, show: bool = True) -> None:
         cmd = "SET" if show else "SETN"
         resp = self.send(f"{cmd} {int(index)} {int(r)} {int(g)} {int(b)}")
         if not resp.startswith("OK"):
             raise RuntimeError(resp)
+        self._set_cached_pixel(index, r, g, b)
 
     def show(self) -> None:
         resp = self.send("SHOW")
@@ -161,6 +179,22 @@ class LedWifiController:
             raise RuntimeError(resp)
 
     def set_frame(self, colors: list[tuple[int, int, int]]) -> None:
-        for i, (r, g, b) in enumerate(colors):
-            self.set_pixel(i, r, g, b, show=False)
-        self.show()
+        desired = [(int(r), int(g), int(b)) for (r, g, b) in colors]
+        if self._frame_cache is not None and len(self._frame_cache) == len(desired):
+            changed_indices = [i for i, color in enumerate(desired) if self._frame_cache[i] != color]
+        else:
+            changed_indices = list(range(len(desired)))
+
+        if not changed_indices:
+            return
+
+        try:
+            for i in changed_indices:
+                r, g, b = desired[i]
+                self.set_pixel(i, r, g, b, show=False)
+            self.show()
+        except Exception:
+            self._frame_cache = None
+            raise
+
+        self._frame_cache = list(desired)
