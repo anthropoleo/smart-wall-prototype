@@ -11,6 +11,8 @@ export function createRoutesController({
   routeFoldersEl,
   reloadRoutesBtn,
   freestyleModeBtn,
+  freestyleToolsEl,
+  onFreestyleModeChange,
   editModeToggle,
   routePinInput,
   routeNameInput,
@@ -23,6 +25,15 @@ export function createRoutesController({
 
   function routeKey(level, slot) {
     return `${level}:${slot}`;
+  }
+
+  function syncFreestyleUi() {
+    if (freestyleToolsEl) {
+      freestyleToolsEl.hidden = !freestyleMode;
+    }
+    if (typeof onFreestyleModeChange === "function") {
+      onFreestyleModeChange(freestyleMode);
+    }
   }
 
   function syncRouteEditorUi() {
@@ -52,6 +63,8 @@ export function createRoutesController({
     if (freestyleModeBtn) {
       freestyleModeBtn.classList.toggle("active", freestyleMode);
     }
+
+    syncFreestyleUi();
   }
 
   function setSelectedRoute(level, slot, name = "") {
@@ -65,7 +78,6 @@ export function createRoutesController({
   }
 
   function selectFreestyleMode() {
-    if (!isAdmin) return;
     freestyleMode = true;
     selectedRoute = null;
     if (routeNameInput) {
@@ -73,6 +85,22 @@ export function createRoutesController({
     }
     refreshRouteSelectionText();
     syncRouteEditorUi();
+  }
+
+  async function enableFreestyleMode() {
+    selectFreestyleMode();
+    grid.clearAll();
+
+    const freestyleMessage = freestyleToolsEl
+      ? "Freestyle mode enabled. Pick white, blue, or pink, then click holds to light them."
+      : "Freestyle mode enabled. Click holds to toggle them manually.";
+
+    try {
+      await api("POST", "/api/clear");
+      setStatus(freestyleMessage);
+    } catch (error) {
+      setStatus(`Freestyle mode enabled, but wall clear failed: ${error.message}`);
+    }
   }
 
   async function applyRoute(level, slot, fallbackName) {
@@ -228,9 +256,8 @@ export function createRoutesController({
     }
 
     if (freestyleModeBtn) {
-      freestyleModeBtn.addEventListener("click", () => {
-        selectFreestyleMode();
-        setStatus("Freestyle mode enabled. You can toggle any lights manually; this mode does not save routes.");
+      freestyleModeBtn.addEventListener("click", async () => {
+        await enableFreestyleMode();
       });
     }
 

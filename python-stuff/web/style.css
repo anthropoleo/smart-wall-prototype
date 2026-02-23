@@ -314,6 +314,16 @@ h2 {
     0 8px 18px rgba(17, 189, 233, 0.22);
 }
 
+.freestyle-tools {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(6, 7, 11, 0.45);
+}
+
 .level-folder {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;

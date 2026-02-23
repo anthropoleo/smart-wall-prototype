@@ -33,6 +33,7 @@ const swatches = Array.from(document.querySelectorAll(".swatch"));
 const routeFolders = document.getElementById("routeFolders");
 const reloadRoutesBtn = document.getElementById("reloadRoutesBtn");
 const freestyleModeBtn = document.getElementById("freestyleModeBtn");
+const freestyleTools = document.getElementById("freestyleTools");
 const editModeToggle = document.getElementById("editModeToggle");
 const routePinInput = document.getElementById("routePin");
 const routeNameInput = document.getElementById("routeName");
@@ -64,7 +65,7 @@ function warnDeviceLedCount(numLeds) {
 }
 
 const grid = createGridController({
-  isAdmin,
+  initialInteractive: isAdmin,
   stripEl: strip,
   selectedInfoEl: selectedInfo,
   colorInput: color,
@@ -86,6 +87,10 @@ const routes = createRoutesController({
   routeFoldersEl: routeFolders,
   reloadRoutesBtn,
   freestyleModeBtn,
+  freestyleToolsEl: freestyleTools,
+  onFreestyleModeChange: (enabled) => {
+    grid.setInteractive(isAdmin || enabled);
+  },
   editModeToggle,
   routePinInput,
   routeNameInput,

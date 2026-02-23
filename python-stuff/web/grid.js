@@ -38,7 +38,7 @@ function gridToIndex(col, row) {
 }
 
 export function createGridController({
-  isAdmin,
+  initialInteractive,
   stripEl,
   selectedInfoEl,
   colorInput,
@@ -47,9 +47,10 @@ export function createGridController({
   onSetPixel,
 }) {
   let selected = 0;
+  let interactive = !!initialInteractive;
   let state = Array.from({ length: NUM_LEDS }, () => [0, 0, 0]);
   const ledEls = Array.from({ length: NUM_LEDS }, () => null);
-  let activeColorHex = (colorInput?.value || "#ff0000").toLowerCase();
+  let activeColorHex = (colorInput?.value || "#ffffff").toLowerCase();
 
   function renderSelected() {
     if (selectedInfoEl) {
@@ -147,7 +148,7 @@ export function createGridController({
   }
 
   async function handleLedClick(index, event) {
-    if (!isAdmin) return;
+    if (!interactive) return;
 
     if (!event.shiftKey) {
       setSelectedIndex(index);
@@ -182,18 +183,13 @@ export function createGridController({
         const index = gridToIndex(col, row);
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `led${index === selected ? " selected" : ""}${isAdmin ? "" : " readonly"}`;
+        button.className = `led${index === selected ? " selected" : ""}${interactive ? "" : " readonly"}`;
         button.title = `LED ${index + 1}`;
         button.textContent = String(index + 1);
         button.style.setProperty("--i", String(drawIndex));
-
-        if (isAdmin) {
-          button.addEventListener("click", (event) => {
-            void handleLedClick(index, event);
-          });
-        } else {
-          button.setAttribute("aria-disabled", "true");
-        }
+        button.addEventListener("click", (event) => {
+          void handleLedClick(index, event);
+        });
 
         ledEls[index] = button;
         updateLedVisual(index);
@@ -204,6 +200,26 @@ export function createGridController({
 
     renderSelected();
     syncSwatchSelection();
+    updateInteractivityUi();
+  }
+
+  function updateInteractivityUi() {
+    for (const ledEl of ledEls) {
+      if (!ledEl) continue;
+      ledEl.classList.toggle("readonly", !interactive);
+      if (interactive) {
+        ledEl.removeAttribute("aria-disabled");
+      } else {
+        ledEl.setAttribute("aria-disabled", "true");
+      }
+    }
+  }
+
+  function setInteractive(nextInteractive) {
+    const next = !!nextInteractive;
+    if (interactive === next) return;
+    interactive = next;
+    updateInteractivityUi();
   }
 
   function bindColorControls() {
@@ -238,5 +254,6 @@ export function createGridController({
     getFrame,
     setAll,
     clearAll,
+    setInteractive,
   };
 }

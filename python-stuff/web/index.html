@@ -39,7 +39,7 @@
             <span class="mono" id="selectedInfo">Selected LED: 1</span>
           </div>
           <div class="hint">
-            Display mode: this grid previews the active route. Route selection is on the right.
+            Select a saved route to preview it. In Freestyle mode, click holds to turn them on/off.
           </div>
           <div class="grid-shell">
             <div class="strip" id="strip"></div>
@@ -52,7 +52,19 @@
             <button id="reloadRoutesBtn" type="button">Reload</button>
           </div>
           <div class="hint">
-            Levels 4-7 contain 3 saved routes each. Click a route to preview it and apply it on the wall.
+            Levels 4-7 contain 3 saved routes each. Choose Freestyle for manual unsaved lighting.
+          </div>
+          <div class="route-modes">
+            <button id="freestyleModeBtn" type="button" class="route-mode">Freestyle</button>
+          </div>
+          <div class="freestyle-tools" id="freestyleTools" hidden>
+            <div class="mono">Freestyle Colors</div>
+            <input id="color" type="hidden" value="#ffffff" />
+            <div class="swatches">
+              <button type="button" class="swatch" data-color="#ffffff" title="White"></button>
+              <button type="button" class="swatch" data-color="#11bde9" title="Blue"></button>
+              <button type="button" class="swatch" data-color="#f31892" title="Pink"></button>
+            </div>
           </div>
           <div class="route-folders" id="routeFolders"></div>
           <div class="mono" id="routeSelection">Selected route: none</div>
