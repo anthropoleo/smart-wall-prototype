@@ -27,6 +27,7 @@ const swatches = Array.from(document.querySelectorAll(".swatch"));
 
 const routeFolders = document.getElementById("routeFolders");
 const reloadRoutesBtn = document.getElementById("reloadRoutesBtn");
+const freestyleModeBtn = document.getElementById("freestyleModeBtn");
 const editModeToggle = document.getElementById("editModeToggle");
 const routePinInput = document.getElementById("routePin");
 const routeNameInput = document.getElementById("routeName");
@@ -43,6 +44,7 @@ const ledEls = Array.from({ length: NUM_LEDS }, () => null);
 let activeColorHex = color.value.toLowerCase();
 
 let selectedRoute = null;
+let freestyleMode = false;
 const routeBtnByKey = new Map();
 
 function routeKey(level, slot) {
@@ -231,14 +233,16 @@ function syncTransportUi() {
 }
 
 function syncRouteEditorUi() {
-  const enabled = editModeToggle.checked;
-  routePinInput.disabled = !enabled;
-  routeNameInput.disabled = !enabled;
-  saveRouteBtn.disabled = !enabled || !selectedRoute;
+  const canEditSelectedRoute = editModeToggle.checked && !!selectedRoute;
+  routePinInput.disabled = !canEditSelectedRoute;
+  routeNameInput.disabled = !canEditSelectedRoute;
+  saveRouteBtn.disabled = !canEditSelectedRoute;
 }
 
 function refreshRouteSelectionText() {
-  if (!selectedRoute) {
+  if (freestyleMode) {
+    routeSelection.textContent = "Selected mode: Freestyle (manual lights, unsaved)";
+  } else if (!selectedRoute) {
     routeSelection.textContent = "Selected route: none";
   } else {
     routeSelection.textContent = `Selected route: Level ${selectedRoute.level} · Slot ${selectedRoute.slot}`;
@@ -248,13 +252,23 @@ function refreshRouteSelectionText() {
   for (const [key, button] of routeBtnByKey.entries()) {
     button.classList.toggle("active", key === activeKey);
   }
+  freestyleModeBtn.classList.toggle("active", freestyleMode);
 }
 
 function setSelectedRoute(level, slot, name = "") {
+  freestyleMode = false;
   selectedRoute = { level, slot };
   if (typeof name === "string" && name.trim()) {
     routeNameInput.value = name.trim();
   }
+  refreshRouteSelectionText();
+  syncRouteEditorUi();
+}
+
+function selectFreestyleMode() {
+  freestyleMode = true;
+  selectedRoute = null;
+  routeNameInput.value = "";
   refreshRouteSelectionText();
   syncRouteEditorUi();
 }
@@ -279,7 +293,7 @@ function renderRoutes(levels) {
 
     const folder = document.createElement("details");
     folder.className = "level-folder";
-    if (selectedRoute) {
+    if (selectedRoute && !freestyleMode) {
       folder.open = selectedRoute.level === level;
     } else {
       folder.open = level === 4;
@@ -454,6 +468,11 @@ reloadRoutesBtn.addEventListener("click", async () => {
   } catch (e) {
     setStatus(`Route reload failed: ${e.message}`);
   }
+});
+
+freestyleModeBtn.addEventListener("click", () => {
+  selectFreestyleMode();
+  setStatus("Freestyle mode enabled. You can toggle any lights manually; this mode does not save routes.");
 });
 
 connectBtn.addEventListener("click", async () => {

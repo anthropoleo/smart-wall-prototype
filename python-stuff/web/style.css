@@ -264,6 +264,23 @@ h2 {
   gap: 10px;
 }
 
+.route-modes {
+  margin-bottom: 10px;
+}
+
+.route-mode {
+  width: 100%;
+  text-align: left;
+  justify-content: flex-start;
+}
+
+.route-mode.active {
+  border-color: var(--brand-cyan);
+  box-shadow:
+    0 0 0 1px rgba(17, 189, 233, 0.25) inset,
+    0 8px 18px rgba(17, 189, 233, 0.22);
+}
+
 .level-folder {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;

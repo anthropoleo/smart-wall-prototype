@@ -13,28 +13,43 @@
 #include <FastLED.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <cstring>
+
+#ifdef __has_include
+#if __has_include("wifi_secrets.h")
+#include "wifi_secrets.h"
+#endif
+#endif
+
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD ""
+#endif
 
 #define DATA_PIN 21
 #define NUM_LEDS 35
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GBR
 #define DEFAULT_BRIGHTNESS 32
+#define WIFI_CONNECT_TIMEOUT_MS 15000UL
+#define WIFI_RETRY_INTERVAL_MS 5000UL
 
 CRGB leds[NUM_LEDS];
 String line;
 WebServer server(80);
 
-const char* AP_SSID = "LED-WALL-ESP32";
-const char* AP_PASS = "climbsafe123";
+const char* WIFI_STA_SSID = WIFI_SSID;
+const char* WIFI_STA_PASS = WIFI_PASSWORD;
+bool httpServerStarted = false;
+unsigned long lastWifiRetryMs = 0;
 
 int clamp8(int v) {
   if (v < 0) return 0;
   if (v > 255) return 255;
   return v;
-}
-
-void replyOK() {
-  Serial.println("OK");
 }
 
 void replyErr(const String& msg) {
@@ -123,6 +138,57 @@ bool readLine(String& out) {
   return false;
 }
 
+bool connectWifiStation() {
+  if (std::strlen(WIFI_STA_SSID) == 0) {
+    Serial.println("WARN Wi-Fi credentials missing. Add include/wifi_secrets.h");
+    return false;
+  }
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
+  WiFi.begin(WIFI_STA_SSID, WIFI_STA_PASS);
+
+  Serial.print("Connecting to Wi-Fi SSID: ");
+  Serial.println(WIFI_STA_SSID);
+
+  const unsigned long startedAt = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS) {
+    delay(250);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.print("ERR Wi-Fi connect failed, status=");
+    Serial.println((int)WiFi.status());
+    return false;
+  }
+
+  Serial.print("Wi-Fi connected, IP: ");
+  Serial.println(WiFi.localIP());
+  return true;
+}
+
+void maintainWifiConnection() {
+  if (std::strlen(WIFI_STA_SSID) == 0) {
+    return;
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  const unsigned long now = millis();
+  if (now - lastWifiRetryMs < WIFI_RETRY_INTERVAL_MS) {
+    return;
+  }
+  lastWifiRetryMs = now;
+
+  Serial.println("Wi-Fi disconnected, retrying...");
+  WiFi.disconnect();
+  WiFi.begin(WIFI_STA_SSID, WIFI_STA_PASS);
+}
+
 void setup() {
   Serial.begin(115200);
   delay(2000);  // Increased delay to ensure ESP32 is fully ready
@@ -131,15 +197,14 @@ void setup() {
   FastLED.setBrightness(DEFAULT_BRIGHTNESS);
   FastLED.clear(true);
 
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  const bool wifiConnected = connectWifiStation();
 
   server.on("/", HTTP_GET, []() {
-    String msg = "LED Wall ESP32 AP ready\n";
+    String msg = "LED Wall ESP32 STA ready\n";
     msg += "SSID: ";
-    msg += AP_SSID;
+    msg += WIFI_STA_SSID;
     msg += "\nIP: ";
-    msg += WiFi.softAPIP().toString();
+    msg += (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "DISCONNECTED";
     msg += "\nUse /cmd?q=PING\n";
     server.send(200, "text/plain", msg);
   });
@@ -155,17 +220,33 @@ void setup() {
     server.send(code, "text/plain", response);
   });
 
-  server.begin();
+  if (wifiConnected) {
+    server.begin();
+    httpServerStarted = true;
+  }
 
   Serial.println("READY");
-  Serial.print("AP SSID: ");
-  Serial.println(AP_SSID);
-  Serial.print("AP IP: ");
-  Serial.println(WiFi.softAPIP());
+  if (wifiConnected) {
+    Serial.print("Wi-Fi SSID: ");
+    Serial.println(WIFI_STA_SSID);
+    Serial.print("Wi-Fi IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("HTTP disabled until Wi-Fi connects.");
+  }
 }
 
 void loop() {
-  server.handleClient();
+  maintainWifiConnection();
+  if (!httpServerStarted && WiFi.status() == WL_CONNECTED) {
+    server.begin();
+    httpServerStarted = true;
+    Serial.print("HTTP server started, IP: ");
+    Serial.println(WiFi.localIP());
+  }
+  if (httpServerStarted) {
+    server.handleClient();
+  }
 
   if (readLine(line)) {
     String response = runCommand(line);

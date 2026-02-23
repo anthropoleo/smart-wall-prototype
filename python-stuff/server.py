@@ -7,7 +7,7 @@ Serves:
   commands sent to the ESP32 (via serial or Wi-Fi transport)
 
 This process runs on the host computer; it talks to the microcontroller over the
-USB serial port or ESP32 AP over Wi-Fi.
+USB serial port or LAN Wi-Fi.
 """
 
 import os
@@ -191,7 +191,7 @@ def connect(req: ConnectRequest):
         }
     except Exception as e:
         if req.transport == "wifi":
-            hint = "Connect Mac to ESP32 AP, then use host 192.168.4.1 and Connect."
+            hint = "Use the ESP32's LAN IP on the same Wi-Fi network as this server (for example 192.168.1.120)."
         else:
             hint = "Click Refresh, pick the ESP32 serial port, then Connect."
         raise _http_error(e, status_code=400, hint=hint)

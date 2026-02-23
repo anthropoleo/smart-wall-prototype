@@ -12,3 +12,11 @@ __pycache__/
 .venv/
 venv/
 env/
+
+# Local firmware Wi-Fi credentials (keep private)
+include/wifi_secrets.h
+
+
+
+ignore/
+/ignore/

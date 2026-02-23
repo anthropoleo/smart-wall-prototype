@@ -2,13 +2,17 @@
 
 ESP32 + FastAPI + Web UI controller for a 35-LED climbing wall prototype.
 
+## Documentation
+
+- Contributor/developer details: `docs/DEVELOPER.md`
+
 ## Current architecture
 
 - **Firmware (`../src/main.cpp`)**
   - Drives a 5x7 wall (35 LEDs) with FastLED.
   - Accepts the same command protocol over:
     - USB serial (`115200`)
-    - HTTP on ESP32 AP (`GET /cmd?q=<COMMAND>`)
+    - HTTP on ESP32 LAN IP (`GET /cmd?q=<COMMAND>`)
 - **Backend (`server.py`)**
   - Serves UI and forwards API requests to either serial or Wi‑Fi transport.
   - Persists route slots in `python-stuff/data/routes.json`.
@@ -18,13 +22,13 @@ ESP32 + FastAPI + Web UI controller for a 35-LED climbing wall prototype.
 - **Frontend (`web/`)**
   - 5x7 clickable grid with serpentine index mapping.
   - Saved-route panel: Levels 4-7, 3 slots per level.
-  - Transport selector: `Serial (USB)` or `Wi‑Fi (ESP32 AP)`.
+  - Transport selector: `Serial (USB)` or `Wi‑Fi (LAN)`.
 
-## ESP32 AP defaults
+## ESP32 Wi-Fi (station mode)
 
-- SSID: `LED-WALL-ESP32`
-- Password: `climbsafe123` YES, I'M POSTING THE PASSWORD ON GITHUG, ARREST ME 
-- Host IP: usually `192.168.4.1`
+- ESP32 joins an existing 2.4 GHz network using credentials from `include/wifi_secrets.h`.
+- Keep credentials out of git by copying `include/wifi_secrets.example.h` to `include/wifi_secrets.h` locally.
+- ESP32 host IP comes from your router DHCP lease (for example `192.168.1.120`).
 
 ## Command protocol
 
@@ -60,12 +64,18 @@ From repo root:
 pio run -t upload
 ```
 
+Before uploading, configure local Wi-Fi credentials:
+
+```bash
+cp include/wifi_secrets.example.h include/wifi_secrets.h
+```
+
 ## Backend API highlights
 
 - `GET /api/ports` list serial ports
 - `POST /api/connect` connect transport
   - Serial: `{"transport":"serial","port":"/dev/cu.usbmodem..."}`
-  - Wi‑Fi: `{"transport":"wifi","host":"192.168.4.1"}`
+  - Wi‑Fi: `{"transport":"wifi","host":"192.168.1.120"}`
 - `POST /api/disconnect`
 - `GET /api/status`
 - `GET/POST /api/color-order` (`rgb`, `grb`, `gbr`, etc.)

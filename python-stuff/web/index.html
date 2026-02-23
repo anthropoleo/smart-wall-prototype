@@ -35,7 +35,7 @@
             Transport
             <select id="transportSelect">
               <option value="serial">Serial (USB)</option>
-              <option value="wifi">Wi‑Fi (ESP32 AP)</option>
+              <option value="wifi">Wi‑Fi (LAN)</option>
             </select>
           </label>
           <label>
@@ -44,7 +44,7 @@
           </label>
           <label>
             Wi‑Fi Host
-            <input id="hostInput" type="text" value="192.168.4.1" placeholder="192.168.4.1" />
+            <input id="hostInput" type="text" value="" placeholder="ESP32 IP (e.g. 192.168.1.120)" />
           </label>
           <button id="refreshPorts">Refresh</button>
           <button id="connectBtn">Connect</button>
@@ -96,7 +96,12 @@
             <button id="reloadRoutesBtn" type="button">Reload</button>
           </div>
           <div class="hint">
-            Difficulty folders contain 3 route slots each. Click a route to light it up.
+            Levels 4-7 contain 3 saved routes each. Or pick Freestyle for manual unsaved lighting.
+          </div>
+          <div class="route-modes">
+            <button id="freestyleModeBtn" type="button" class="route-mode">
+              Freestyle (manual lights)
+            </button>
           </div>
           <div class="route-folders" id="routeFolders"></div>
 
