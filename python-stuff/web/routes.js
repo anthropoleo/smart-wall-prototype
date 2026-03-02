@@ -23,9 +23,10 @@ export function createRoutesController({
   }
 
   function syncRouteEditorUi() {
-    const canEditSelectedRoute = isAdmin && !!selectedRoute;
-    if (routeNameInput) routeNameInput.disabled = !canEditSelectedRoute;
-    if (saveRouteBtn) saveRouteBtn.disabled = !canEditSelectedRoute;
+    const canEditName = isAdmin;
+    const canSaveSelectedRoute = isAdmin && !!selectedRoute;
+    if (routeNameInput) routeNameInput.disabled = !canEditName;
+    if (saveRouteBtn) saveRouteBtn.disabled = !canSaveSelectedRoute;
   }
 
   function setRouteButtonsDisabled(disabled) {
@@ -117,6 +118,7 @@ export function createRoutesController({
 
     routeFoldersEl.innerHTML = "";
     routeBtnByKey.clear();
+    let firstRoute = null;
 
     if (!Array.isArray(levels) || !levels.length) {
       const empty = document.createElement("div");
@@ -149,6 +151,9 @@ export function createRoutesController({
       for (const route of routes) {
         const slot = Number(route.slot);
         const name = String(route.name || `Route ${slot}`);
+        if (!firstRoute) {
+          firstRoute = { level, slot, name };
+        }
 
         const button = document.createElement("button");
         button.type = "button";
@@ -156,6 +161,11 @@ export function createRoutesController({
         button.disabled = routeApplyInFlight;
         button.textContent = `${slot}. ${name}`;
         button.addEventListener("click", () => {
+          if (isAdmin) {
+            setSelectedRoute(level, slot, name);
+            setStatus(`Selected Level ${level} | Slot ${slot} for save.`);
+            return;
+          }
           void applyRoute(level, slot, name);
         });
 
@@ -173,6 +183,11 @@ export function createRoutesController({
       if (routeNameInput) {
         routeNameInput.value = "";
       }
+    }
+
+    if (isAdmin && !selectedRoute && firstRoute) {
+      setSelectedRoute(firstRoute.level, firstRoute.slot, firstRoute.name);
+      setStatus(`Selected Level ${firstRoute.level} | Slot ${firstRoute.slot} for save.`);
     }
 
     refreshRouteSelectionText();
