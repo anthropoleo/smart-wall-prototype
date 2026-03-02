@@ -118,6 +118,18 @@
       </div>
     </main>
 
+    <script>
+      (function initAdminToken() {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+        if (!token) {
+          window.__LED_ADMIN_TOKEN__ = "";
+          return;
+        }
+        window.__LED_ADMIN_TOKEN__ = token;
+        window.history.replaceState({}, document.title, "/admin");
+      })();
+    </script>
     <script type="module" src="/static/main.js"></script>
   </body>
 </html>

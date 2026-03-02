@@ -2,8 +2,8 @@
 <!--
   LED Wall Controller admin unlock UI.
 
-  Served by FastAPI (`python-stuff/server.py`) at `/admin` when the admin
-  session cookie is missing or expired.
+  Served by FastAPI (`python-stuff/server.py`) at `/admin` whenever a valid
+  admin unlock token is not provided.
 -->
 <html lang="en">
   <head>
@@ -36,8 +36,8 @@
       <section class="panel controls-panel">
         <h2>Admin PIN required</h2>
         <div class="hint">
-          Enter the PIN once to unlock admin mode. You will not need to re-enter
-          it for each route save.
+          Enter the PIN to open admin mode. You will be asked again the next time
+          you open Admin Controls.
         </div>
         <form id="unlockForm" class="row">
           <label>
@@ -60,6 +60,8 @@
     <script type="module">
       import { api } from "/static/api.js";
 
+      window.__LED_ADMIN_TOKEN__ = "";
+
       const form = document.getElementById("unlockForm");
       const pinInput = document.getElementById("adminPin");
       const unlockBtn = document.getElementById("unlockBtn");
@@ -81,10 +83,13 @@
         if (unlockBtn) unlockBtn.disabled = true;
         setStatus("Checking PIN...");
         try {
-          await api("POST", "/api/admin/unlock", { pin });
+          const payload = await api("POST", "/api/admin/unlock", { pin });
+          const token = typeof payload?.token === "string" ? payload.token : "";
+          if (!token) {
+            throw new Error("Unlock token missing.");
+          }
           setStatus("Access granted. Opening admin mode...");
-          // Add a cache-busting query to avoid stale lock-page loops in browsers.
-          window.location.replace(`/admin?ts=${Date.now()}`);
+          window.location.replace(`/admin?token=${encodeURIComponent(token)}&ts=${Date.now()}`);
         } catch (error) {
           setStatus(`Access denied: ${error.message}`);
           pinInput?.select();

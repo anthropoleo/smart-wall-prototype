@@ -77,13 +77,12 @@ serial_ctrl = LedSerialController(port=os.getenv("LED_PORT"))
 wifi_ctrl = LedWifiController(host=os.getenv("LED_WIFI_HOST"))
 route_store = RouteStore(path=routes_path, num_leds=35)
 admin_pin = os.getenv("LED_ADMIN_PIN", os.getenv("LED_ROUTE_EDITOR_PIN", "2468"))
-admin_session_cookie = "led_admin_session"
 try:
-    admin_session_ttl_seconds = max(300, int(os.getenv("LED_ADMIN_SESSION_TTL_SECONDS", "43200")))
+    admin_token_ttl_seconds = max(300, int(os.getenv("LED_ADMIN_SESSION_TTL_SECONDS", "43200")))
 except ValueError:
-    admin_session_ttl_seconds = 43200
-admin_sessions: dict[str, float] = {}
-admin_sessions_lock = threading.Lock()
+    admin_token_ttl_seconds = 43200
+admin_tokens: dict[str, float] = {}
+admin_tokens_lock = threading.Lock()
 ctrl = serial_ctrl
 transport: Literal["serial", "wifi"] = "serial"
 last_info: dict | None = None
@@ -180,7 +179,7 @@ def admin(request: Request):
         "Pragma": "no-cache",
         "Expires": "0",
     }
-    if not _has_admin_session(request):
+    if admin_pin and not _has_admin_token(request.query_params.get("token", "")):
         return FileResponse(WEB_DIR / "admin-lock.html", headers=cache_headers)
     return FileResponse(WEB_DIR / "admin.html", headers=cache_headers)
 
@@ -192,37 +191,35 @@ def freestyle():
 
 @app.get("/api/admin/session")
 def admin_session(request: Request):
-    return {"ok": True, "pin_required": bool(admin_pin), "unlocked": _has_admin_session(request)}
+    return {"ok": True, "pin_required": bool(admin_pin), "unlocked": _has_admin_token(_request_admin_token(request))}
 
 
 @app.post("/api/admin/unlock")
 def admin_unlock(req: AdminUnlockRequest):
     if not admin_pin:
-        return {"ok": True, "pin_required": False, "unlocked": True}
+        return {"ok": True, "pin_required": False, "unlocked": True, "token": None}
     if req.pin != admin_pin:
         raise HTTPException(status_code=403, detail="Invalid admin PIN.")
 
-    token = _create_admin_session_token()
-    response = JSONResponse({"ok": True, "pin_required": True, "unlocked": True})
-    response.set_cookie(
-        key=admin_session_cookie,
-        value=token,
-        max_age=admin_session_ttl_seconds,
-        httponly=True,
-        samesite="lax",
+    token = _create_admin_token()
+    return JSONResponse(
+        {
+            "ok": True,
+            "pin_required": True,
+            "unlocked": True,
+            "token": token,
+            "expires_in": admin_token_ttl_seconds,
+        }
     )
-    return response
 
 
 @app.post("/api/admin/logout")
 def admin_logout(request: Request):
-    token = request.cookies.get(admin_session_cookie)
+    token = _request_admin_token(request)
     if token:
-        with admin_sessions_lock:
-            admin_sessions.pop(token, None)
-    response = JSONResponse({"ok": True})
-    response.delete_cookie(admin_session_cookie)
-    return response
+        with admin_tokens_lock:
+            admin_tokens.pop(token, None)
+    return {"ok": True}
 
 
 @app.get("/api/ports")
@@ -345,37 +342,41 @@ def _require_connected():
         raise HTTPException(status_code=409, detail="Not connected. POST /api/connect first.")
 
 
-def _purge_expired_admin_sessions(now: float):
-    expired_tokens = [token for token, expiry in admin_sessions.items() if expiry <= now]
+def _purge_expired_admin_tokens(now: float):
+    expired_tokens = [token for token, expiry in admin_tokens.items() if expiry <= now]
     for token in expired_tokens:
-        admin_sessions.pop(token, None)
+        admin_tokens.pop(token, None)
 
 
-def _create_admin_session_token() -> str:
+def _create_admin_token() -> str:
     token = secrets.token_urlsafe(32)
     now = time.time()
-    expires_at = now + admin_session_ttl_seconds
-    with admin_sessions_lock:
-        _purge_expired_admin_sessions(now)
-        admin_sessions[token] = expires_at
+    expires_at = now + admin_token_ttl_seconds
+    with admin_tokens_lock:
+        _purge_expired_admin_tokens(now)
+        admin_tokens[token] = expires_at
     return token
 
 
-def _has_admin_session(request: Request) -> bool:
-    if not admin_pin:
-        return True
-    token = request.cookies.get(admin_session_cookie)
+def _has_admin_token(token: str) -> bool:
     if not token:
         return False
     now = time.time()
-    with admin_sessions_lock:
-        _purge_expired_admin_sessions(now)
-        expiry = admin_sessions.get(token)
+    with admin_tokens_lock:
+        _purge_expired_admin_tokens(now)
+        expiry = admin_tokens.get(token)
         return bool(expiry and expiry > now)
 
 
+def _request_admin_token(request: Request) -> str:
+    token = request.headers.get("X-Admin-Token", "").strip()
+    if token:
+        return token
+    return request.query_params.get("token", "").strip()
+
+
 def _require_admin_session(request: Request):
-    if not _has_admin_session(request):
+    if admin_pin and not _has_admin_token(_request_admin_token(request)):
         raise HTTPException(status_code=403, detail="Admin PIN required.")
 
 
