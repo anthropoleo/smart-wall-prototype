@@ -1,10 +1,10 @@
-# LED Wall Controller
+# Open soource project for a SMART WALL
 
-ESP32 + FastAPI + Web UI controller for a 35-LED climbing wall prototype.
+ESP32 + FastAPI + Web UI controller for a climbing wall prototype. Developed this software for a local Rock Climbing gym (On Belay Climbing, based on the Gold Coast). Feel free to clone this repo and use the code in your own project.
 
-## Documentation
 
-- Contributor/developer details: `docs/DEVELOPER.md`
+![alt text](image.png)
+
 
 ## Current architecture
 
@@ -92,9 +92,12 @@ cp include/wifi_secrets.example.h include/wifi_secrets.h
 
 ## Route editing security
 
-- Setter route edits are gated by `LED_ROUTE_EDITOR_PIN` (default `2468`).
+- Setter route edits are gated by `LED_ROUTE_EDITOR_PIN` 
 - Override with:
 
 ```bash
 export LED_ROUTE_EDITOR_PIN=your-pin
 ```
+
+
+

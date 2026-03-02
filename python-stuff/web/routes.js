@@ -10,8 +10,6 @@ export function createRoutesController({
   onRouteLedCount,
   routeFoldersEl,
   reloadRoutesBtn,
-  editModeToggle,
-  routePinInput,
   routeNameInput,
   routeSelectionEl,
   saveRouteBtn,
@@ -25,8 +23,7 @@ export function createRoutesController({
   }
 
   function syncRouteEditorUi() {
-    const canEditSelectedRoute = isAdmin && !!editModeToggle?.checked && !!selectedRoute;
-    if (routePinInput) routePinInput.disabled = !canEditSelectedRoute;
+    const canEditSelectedRoute = isAdmin && !!selectedRoute;
     if (routeNameInput) routeNameInput.disabled = !canEditSelectedRoute;
     if (saveRouteBtn) saveRouteBtn.disabled = !canEditSelectedRoute;
   }
@@ -189,19 +186,8 @@ export function createRoutesController({
   }
 
   async function saveSelectedRoute() {
-    if (!editModeToggle?.checked) {
-      setStatus("Enable route editing mode first.");
-      return;
-    }
-
     if (!selectedRoute) {
       setStatus("Pick a route slot from the level folders first.");
-      return;
-    }
-
-    const pin = routePinInput?.value.trim() || "";
-    if (!pin) {
-      setStatus("Editor PIN is required to save routes.");
       return;
     }
 
@@ -214,7 +200,6 @@ export function createRoutesController({
     try {
       const payload = {
         name,
-        pin,
         frame: grid.getFrame(),
       };
       const response = await api(
@@ -227,6 +212,7 @@ export function createRoutesController({
       setSelectedRoute(selectedRoute.level, selectedRoute.slot, savedName);
       await loadRoutes();
       setStatus(`Saved Level ${selectedRoute.level} | Slot ${selectedRoute.slot} as "${savedName}".`);
+      window.alert(`Route "${savedName}" has been saved successfully.`);
     } catch (error) {
       setStatus(`Save route failed: ${error.message}`);
     }
@@ -247,12 +233,6 @@ export function createRoutesController({
     if (saveRouteBtn) {
       saveRouteBtn.addEventListener("click", async () => {
         await saveSelectedRoute();
-      });
-    }
-
-    if (editModeToggle) {
-      editModeToggle.addEventListener("change", () => {
-        syncRouteEditorUi();
       });
     }
   }

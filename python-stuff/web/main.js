@@ -36,8 +36,6 @@ const swatches = Array.from(document.querySelectorAll(".swatch"));
 
 const routeFolders = document.getElementById("routeFolders");
 const reloadRoutesBtn = document.getElementById("reloadRoutesBtn");
-const editModeToggle = document.getElementById("editModeToggle");
-const routePinInput = document.getElementById("routePin");
 const routeNameInput = document.getElementById("routeName");
 const routeSelection = document.getElementById("routeSelection");
 const saveRouteBtn = document.getElementById("saveRouteBtn");
@@ -131,8 +129,6 @@ if (!isFreestyle) {
     onRouteLedCount: warnRouteLedCount,
     routeFoldersEl: routeFolders,
     reloadRoutesBtn,
-    editModeToggle,
-    routePinInput,
     routeNameInput,
     routeSelectionEl: routeSelection,
     saveRouteBtn,

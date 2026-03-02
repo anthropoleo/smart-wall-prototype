@@ -14,13 +14,15 @@ USB serial port or LAN Wi-Fi.
 
 import os
 import logging
+import secrets
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from serial.tools import list_ports
@@ -36,6 +38,34 @@ from ledwall.routes_store import RouteStore
 
 ROOT = Path(__file__).resolve().parent
 WEB_DIR = ROOT / "web"
+
+
+def _load_local_env_file():
+    env_file = ROOT / ".env"
+    if not env_file.exists():
+        return
+    try:
+        for raw in env_file.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if (
+                (value.startswith('"') and value.endswith('"'))
+                or (value.startswith("'") and value.endswith("'"))
+            ) and len(value) >= 2:
+                value = value[1:-1]
+            if key:
+                os.environ.setdefault(key, value)
+    except Exception as e:
+        log = logging.getLogger("ledwall")
+        log.warning("Failed to parse %s: %s", env_file, e)
+
+
+_load_local_env_file()
+
 routes_path = Path(os.getenv("LED_ROUTES_FILE", str(ROOT / "data" / "routes.json"))).expanduser()
 if not routes_path.is_absolute():
     routes_path = (ROOT / routes_path).resolve()
@@ -46,7 +76,14 @@ app = FastAPI(title="LED Wall Controller", version="0.1.0")
 serial_ctrl = LedSerialController(port=os.getenv("LED_PORT"))
 wifi_ctrl = LedWifiController(host=os.getenv("LED_WIFI_HOST"))
 route_store = RouteStore(path=routes_path, num_leds=35)
-route_editor_pin = os.getenv("LED_ROUTE_EDITOR_PIN", "2468")
+admin_pin = os.getenv("LED_ADMIN_PIN", os.getenv("LED_ROUTE_EDITOR_PIN", "2468"))
+admin_session_cookie = "led_admin_session"
+try:
+    admin_session_ttl_seconds = max(300, int(os.getenv("LED_ADMIN_SESSION_TTL_SECONDS", "43200")))
+except ValueError:
+    admin_session_ttl_seconds = 43200
+admin_sessions: dict[str, float] = {}
+admin_sessions_lock = threading.Lock()
 ctrl = serial_ctrl
 transport: Literal["serial", "wifi"] = "serial"
 last_info: dict | None = None
@@ -101,6 +138,9 @@ class SaveRouteRequest(BaseModel):
     frame: list[list[int]] = Field(
         description="List of [r,g,b] rows (length must match the route LED count)."
     )
+
+
+class AdminUnlockRequest(BaseModel):
     pin: str = Field(min_length=1, max_length=64)
 
 
@@ -134,13 +174,55 @@ def dashboard():
 
 
 @app.get("/admin")
-def admin():
-    return FileResponse(WEB_DIR / "admin.html")
+def admin(request: Request):
+    cache_headers = {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+    if not _has_admin_session(request):
+        return FileResponse(WEB_DIR / "admin-lock.html", headers=cache_headers)
+    return FileResponse(WEB_DIR / "admin.html", headers=cache_headers)
 
 
 @app.get("/freestyle")
 def freestyle():
     return FileResponse(WEB_DIR / "freestyle.html")
+
+
+@app.get("/api/admin/session")
+def admin_session(request: Request):
+    return {"ok": True, "pin_required": bool(admin_pin), "unlocked": _has_admin_session(request)}
+
+
+@app.post("/api/admin/unlock")
+def admin_unlock(req: AdminUnlockRequest):
+    if not admin_pin:
+        return {"ok": True, "pin_required": False, "unlocked": True}
+    if req.pin != admin_pin:
+        raise HTTPException(status_code=403, detail="Invalid admin PIN.")
+
+    token = _create_admin_session_token()
+    response = JSONResponse({"ok": True, "pin_required": True, "unlocked": True})
+    response.set_cookie(
+        key=admin_session_cookie,
+        value=token,
+        max_age=admin_session_ttl_seconds,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/api/admin/logout")
+def admin_logout(request: Request):
+    token = request.cookies.get(admin_session_cookie)
+    if token:
+        with admin_sessions_lock:
+            admin_sessions.pop(token, None)
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(admin_session_cookie)
+    return response
 
 
 @app.get("/api/ports")
@@ -263,11 +345,38 @@ def _require_connected():
         raise HTTPException(status_code=409, detail="Not connected. POST /api/connect first.")
 
 
-def _require_route_editor(pin: str):
-    if not route_editor_pin:
-        raise HTTPException(status_code=503, detail="Route editing is disabled on this server.")
-    if pin != route_editor_pin:
-        raise HTTPException(status_code=403, detail="Invalid route editor PIN.")
+def _purge_expired_admin_sessions(now: float):
+    expired_tokens = [token for token, expiry in admin_sessions.items() if expiry <= now]
+    for token in expired_tokens:
+        admin_sessions.pop(token, None)
+
+
+def _create_admin_session_token() -> str:
+    token = secrets.token_urlsafe(32)
+    now = time.time()
+    expires_at = now + admin_session_ttl_seconds
+    with admin_sessions_lock:
+        _purge_expired_admin_sessions(now)
+        admin_sessions[token] = expires_at
+    return token
+
+
+def _has_admin_session(request: Request) -> bool:
+    if not admin_pin:
+        return True
+    token = request.cookies.get(admin_session_cookie)
+    if not token:
+        return False
+    now = time.time()
+    with admin_sessions_lock:
+        _purge_expired_admin_sessions(now)
+        expiry = admin_sessions.get(token)
+        return bool(expiry and expiry > now)
+
+
+def _require_admin_session(request: Request):
+    if not _has_admin_session(request):
+        raise HTTPException(status_code=403, detail="Admin PIN required.")
 
 
 @app.get("/api/routes")
@@ -297,9 +406,9 @@ def apply_route(level: int, slot: int):
 
 
 @app.put("/api/routes/{level}/{slot}")
-def save_route(level: int, slot: int, req: SaveRouteRequest):
+def save_route(level: int, slot: int, req: SaveRouteRequest, request: Request):
     try:
-        _require_route_editor(req.pin)
+        _require_admin_session(request)
         route = route_store.save_route(level=level, slot=slot, name=req.name, frame=req.frame)
         return {"ok": True, "route": route}
     except HTTPException:
