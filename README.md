@@ -54,6 +54,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m uvicorn server:app --reload --port 8000
+# or
+python3 -m uvicorn server:app --reload --host 0.0.0.0 --port 8000
+# can be reached by other clients
 ```
 
 Open:
