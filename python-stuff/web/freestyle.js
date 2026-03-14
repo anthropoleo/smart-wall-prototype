@@ -12,6 +12,10 @@ export function createFreestyleController({
 }) {
   let lastState = "unknown";
 
+  function getStatusInfo(status) {
+    return status && status.info && typeof status.info === "object" ? status.info : null;
+  }
+
   function setConnectedUi(connected) {
     grid.setInteractive(connected);
     if (clearBtn) {
@@ -26,8 +30,9 @@ export function createFreestyleController({
       const endpoint = status.endpoint || "(unknown)";
       const mode = status.transport || "serial";
       const bits = [`Connected [${mode}]`, endpoint];
-      if (typeof status.info?.num_leds === "number") bits.push(`${status.info.num_leds} LEDs`);
-      if (typeof status.info?.brightness === "number") bits.push(`Bright ${status.info.brightness}`);
+      const info = getStatusInfo(status);
+      if (info && typeof info.num_leds === "number") bits.push(`${info.num_leds} LEDs`);
+      if (info && typeof info.brightness === "number") bits.push(`Bright ${info.brightness}`);
       connectionEl.textContent = bits.join(" | ");
       return;
     }
@@ -41,8 +46,9 @@ export function createFreestyleController({
       renderConnection(status);
       setConnectedUi(!!status.connected);
 
-      if (typeof status.info?.num_leds === "number") {
-        onDeviceLedCount(status.info.num_leds);
+      const info = getStatusInfo(status);
+      if (info && typeof info.num_leds === "number") {
+        onDeviceLedCount(info.num_leds);
       }
 
       const nextState = status.connected ? "connected" : "disconnected";

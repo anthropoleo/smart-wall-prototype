@@ -19,6 +19,10 @@ export function createAdminControlsController({
   fillBtn,
   clearBtn,
 }) {
+  function getStatusInfo(status) {
+    return status && status.info && typeof status.info === "object" ? status.info : null;
+  }
+
   function syncTransportUi() {
     if (!transportSelect || !portSelect || !refreshPortsBtn || !hostInput) return;
 
@@ -70,10 +74,11 @@ export function createAdminControlsController({
         const endpoint = status.endpoint || "(unknown)";
         const mode = status.transport || "serial";
         const bits = [`Connected [${mode}]`, endpoint];
-        if (typeof status.info?.num_leds === "number") bits.push(`${status.info.num_leds} LEDs`);
-        if (typeof status.info?.brightness === "number") bits.push(`Bright ${status.info.brightness}`);
+        const info = getStatusInfo(status);
+        if (info && typeof info.num_leds === "number") bits.push(`${info.num_leds} LEDs`);
+        if (info && typeof info.brightness === "number") bits.push(`Bright ${info.brightness}`);
         setStatus(bits.join(" | "));
-        applyDeviceInfo(status.info);
+        applyDeviceInfo(info);
       } else {
         setStatus("Disconnected");
       }
@@ -138,9 +143,9 @@ export function createAdminControlsController({
 
     if (connectBtn) {
       connectBtn.addEventListener("click", async () => {
-        const transport = transportSelect?.value || "serial";
-        const port = portSelect?.value || null;
-        const host = hostInput?.value.trim() || null;
+        const transport = transportSelect ? transportSelect.value : "serial";
+        const port = portSelect ? portSelect.value : null;
+        const host = hostInput ? hostInput.value.trim() || null : null;
 
         try {
           const response = await api("POST", "/api/connect", { transport, port, host });

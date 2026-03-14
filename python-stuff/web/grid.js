@@ -50,7 +50,7 @@ export function createGridController({
   let interactive = !!initialInteractive;
   let state = Array.from({ length: NUM_LEDS }, () => [0, 0, 0]);
   const ledEls = Array.from({ length: NUM_LEDS }, () => null);
-  let activeColorHex = (colorInput?.value || "#ffffff").toLowerCase();
+  let activeColorHex = ((colorInput && colorInput.value) || "#ffffff").toLowerCase();
 
   function renderSelected() {
     if (selectedInfoEl) {
@@ -61,7 +61,11 @@ export function createGridController({
   function syncSwatchSelection() {
     const current = colorInput ? colorInput.value.toLowerCase() : activeColorHex;
     for (const swatch of swatches) {
-      swatch.classList.toggle("active", swatch.dataset.color?.toLowerCase() === current);
+      const swatchColor =
+        swatch.dataset && typeof swatch.dataset.color === "string"
+          ? swatch.dataset.color.toLowerCase()
+          : "";
+      swatch.classList.toggle("active", swatchColor === current);
     }
   }
 
@@ -141,9 +145,13 @@ export function createGridController({
 
   function setSelectedIndex(index) {
     if (index === selected) return;
-    ledEls[selected]?.classList.remove("selected");
+    if (ledEls[selected]) {
+      ledEls[selected].classList.remove("selected");
+    }
     selected = index;
-    ledEls[selected]?.classList.add("selected");
+    if (ledEls[selected]) {
+      ledEls[selected].classList.add("selected");
+    }
     renderSelected();
   }
 

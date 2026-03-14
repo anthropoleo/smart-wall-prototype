@@ -88,7 +88,7 @@ export function createRoutesController({
         }
       }
 
-      if (route?.frame && !grid.applyFrameToState(route.frame)) {
+      if (route && route.frame && !grid.applyFrameToState(route.frame)) {
         if (applyError) {
           setStatus(`Route apply failed: ${applyError.message}`);
         } else {
@@ -97,7 +97,7 @@ export function createRoutesController({
         return;
       }
 
-      const resolvedName = route?.name || defaultName;
+      const resolvedName = route && route.name ? route.name : defaultName;
       setSelectedRoute(level, slot, resolvedName);
 
       if (applyError) {
@@ -206,7 +206,7 @@ export function createRoutesController({
       return;
     }
 
-    const name = routeNameInput?.value.trim() || "";
+    const name = routeNameInput ? routeNameInput.value.trim() : "";
     if (!name) {
       setStatus("Route name is required.");
       return;
@@ -222,7 +222,7 @@ export function createRoutesController({
         `/api/routes/${selectedRoute.level}/${selectedRoute.slot}`,
         payload,
       );
-      const savedName = response.route?.name || name;
+      const savedName = response && response.route && response.route.name ? response.route.name : name;
 
       setSelectedRoute(selectedRoute.level, selectedRoute.slot, savedName);
       await loadRoutes();

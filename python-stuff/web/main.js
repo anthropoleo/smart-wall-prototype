@@ -8,8 +8,10 @@ import { createRoutesController } from "./routes.js";
 import { createAdminControlsController } from "./admin-controls.js";
 import { createFreestyleController } from "./freestyle.js";
 
-const appMode = ["dashboard", "admin", "freestyle"].includes(document.body?.dataset?.appMode || "")
-  ? document.body.dataset.appMode
+const bodyDataset = document.body && document.body.dataset ? document.body.dataset : null;
+const requestedAppMode = bodyDataset && typeof bodyDataset.appMode === "string" ? bodyDataset.appMode : "";
+const appMode = ["dashboard", "admin", "freestyle"].includes(requestedAppMode)
+  ? requestedAppMode
   : "dashboard";
 const isAdmin = appMode === "admin";
 const isFreestyle = appMode === "freestyle";
