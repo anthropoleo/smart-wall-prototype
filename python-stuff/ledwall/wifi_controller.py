@@ -42,7 +42,6 @@ class LedWifiController:
         self._retry_delay_s = max(0.0, float(retry_delay_s))
         self._lock = threading.Lock()
         self._frame_cache: list[tuple[int, int, int]] | None = None
-        self._supports_fast_frame = True
 
     @property
     def port(self) -> str | None:
@@ -56,7 +55,6 @@ class LedWifiController:
         prev = self._host
         self._host = chosen
         self._frame_cache = None
-        self._supports_fast_frame = True
         try:
             self.ping()
         except Exception:
@@ -68,7 +66,6 @@ class LedWifiController:
     def close(self) -> None:
         self._host = ""
         self._frame_cache = None
-        self._supports_fast_frame = True
 
     def _require(self) -> str:
         if not self._host:
@@ -132,28 +129,23 @@ class LedWifiController:
             method="POST",
             headers={"Content-Type": "text/plain"},
         )
-        attempts = self._retries + 1
+        # Use a shorter timeout for the bulk frame path: it's either fast (local LAN)
+        # or it's not going to work — don't block the fallback for 3+ seconds.
+        fast_timeout = min(self._timeout_s, 1.5)
         last_error: Exception | None = None
 
         with self._lock:
-            for attempt in range(attempts):
-                try:
-                    with urlopen(req, timeout=self._timeout_s) as response:
-                        body = response.read().decode("utf-8", errors="replace").strip()
-                    return body or "OK"
-                except HTTPError as e:
-                    body = e.read().decode("utf-8", errors="replace").strip()
-                    if body:
-                        return body
-                    last_error = RuntimeError(f"HTTP {e.code} for frame update")
-                except URLError as e:
-                    reason = getattr(e, "reason", e)
-                    last_error = RuntimeError(f"Failed to reach ESP32 at {self._host}: {reason}")
-                except TimeoutError:
-                    last_error = RuntimeError("Timed out waiting for ESP32 frame response")
-
-                if attempt + 1 < attempts:
-                    time.sleep(self._retry_delay_s)
+            try:
+                with urlopen(req, timeout=fast_timeout) as response:
+                    body = response.read().decode("utf-8", errors="replace").strip()
+                return body or "OK"
+            except HTTPError as e:
+                body = e.read().decode("utf-8", errors="replace").strip()
+                if body:
+                    return body
+                last_error = RuntimeError(f"HTTP {e.code} for frame update")
+            except (URLError, TimeoutError, OSError) as e:
+                last_error = RuntimeError(f"Frame endpoint unavailable: {e}")
 
         if last_error is not None:
             raise last_error
@@ -221,26 +213,28 @@ class LedWifiController:
         if not resp.startswith("OK"):
             raise RuntimeError(resp)
 
-    def set_frame(self, colors: list[tuple[int, int, int]]) -> None:
+    def set_frame(self, colors: list[tuple[int, int, int]], force: bool = False) -> None:
         desired = [(int(r), int(g), int(b)) for (r, g, b) in colors]
-        if self._frame_cache is not None and len(self._frame_cache) == len(desired):
+
+        # Always try the bulk /frame endpoint first: one HTTP request for all pixels,
+        # orders of magnitude faster than N sequential /cmd requests.
+        try:
+            resp = self._send_frame_fast(desired)
+            if not resp.startswith("OK"):
+                raise RuntimeError(resp)
+            self._frame_cache = list(desired)
+            return
+        except Exception:
+            pass  # Fall through to per-pixel path
+
+        # Per-pixel fallback: only send pixels that actually changed (diff cache).
+        if not force and self._frame_cache is not None and len(self._frame_cache) == len(desired):
             changed_indices = [i for i, color in enumerate(desired) if self._frame_cache[i] != color]
         else:
             changed_indices = list(range(len(desired)))
 
         if not changed_indices:
             return
-
-        if self._supports_fast_frame:
-            try:
-                resp = self._send_frame_fast(desired)
-                if not resp.startswith("OK"):
-                    raise RuntimeError(resp)
-                self._frame_cache = list(desired)
-                return
-            except Exception:
-                # Older firmware may not provide /frame; disable fast-path after first failure.
-                self._supports_fast_frame = False
 
         try:
             for i in changed_indices:

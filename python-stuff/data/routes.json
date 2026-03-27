@@ -1,7 +1,7 @@
 {
   "version": 1,
   "num_leds": 35,
-  "updated_at": "2026-03-02T11:13:50+00:00",
+  "updated_at": "2026-03-27T04:07:36+00:00",
   "levels": {
     "4": [
       {
@@ -84,7 +84,7 @@
       },
       {
         "slot": 2,
-        "name": "The Mountain",
+        "name": "The Mountain top",
         "points": [
           {
             "index": 0,
@@ -135,6 +135,14 @@
             ]
           },
           {
+            "index": 21,
+            "color": [
+              255,
+              0,
+              0
+            ]
+          },
+          {
             "index": 26,
             "color": [
               255,
@@ -144,6 +152,14 @@
           },
           {
             "index": 32,
+            "color": [
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "index": 34,
             "color": [
               255,
               255,
@@ -304,7 +320,7 @@
       },
       {
         "slot": 2,
-        "name": "Granite Line",
+        "name": "long Granite Line",
         "points": [
           {
             "index": 5,
@@ -315,15 +331,7 @@
             ]
           },
           {
-            "index": 10,
-            "color": [
-              17,
-              189,
-              233
-            ]
-          },
-          {
-            "index": 11,
+            "index": 9,
             "color": [
               17,
               189,
@@ -339,22 +347,6 @@
             ]
           },
           {
-            "index": 18,
-            "color": [
-              17,
-              189,
-              233
-            ]
-          },
-          {
-            "index": 24,
-            "color": [
-              17,
-              189,
-              233
-            ]
-          },
-          {
             "index": 25,
             "color": [
               17,
@@ -363,7 +355,7 @@
             ]
           },
           {
-            "index": 30,
+            "index": 29,
             "color": [
               17,
               189,

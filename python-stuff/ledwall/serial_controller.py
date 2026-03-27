@@ -267,9 +267,9 @@ class LedSerialController:
         if not resp.startswith("OK"):
             raise RuntimeError(resp)
 
-    def set_frame(self, colors: list[tuple[int, int, int]]) -> None:
+    def set_frame(self, colors: list[tuple[int, int, int]], force: bool = False) -> None:
         desired = [(int(r), int(g), int(b)) for (r, g, b) in colors]
-        if self._frame_cache is not None and len(self._frame_cache) == len(desired):
+        if not force and self._frame_cache is not None and len(self._frame_cache) == len(desired):
             changed_indices = [i for i, color in enumerate(desired) if self._frame_cache[i] != color]
         else:
             changed_indices = list(range(len(desired)))

@@ -93,6 +93,10 @@ cp include/wifi_secrets.example.h include/wifi_secrets.h
   - `POST /api/routes/{level}/{slot}/apply` light route on wall
   - `PUT /api/routes/{level}/{slot}` save a slot (`name`, `frame`, `pin`)
 
+## Wi-Fi frame update architecture
+
+Applying a route over Wi-Fi uses the ESP32's `POST /frame` bulk endpoint: all 35 LEDs are packed into a single 210-character hex payload and sent in one HTTP request (~100–300 ms round-trip on a local network). If that endpoint is unavailable the controller falls back to sending only the pixels that actually changed since the last apply (diff cache), keeping the fallback path fast even for large frames. The UI always updates instantly on click — device communication happens in the background and never blocks the interface.
+
 ## Route editing security
 
 - Setter route edits are gated by `LED_ROUTE_EDITOR_PIN` 

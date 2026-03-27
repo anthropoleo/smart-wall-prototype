@@ -61,27 +61,49 @@ export function createRoutesController({
     syncRouteEditorUi();
   }
 
-  async function applyRoute(level, slot, fallbackName) {
-    if (routeApplyInFlight) {
-      setStatus("Please wait for the current route apply to finish.");
-      return;
-    }
+  let pendingDeviceApply = null; // {level, slot} to apply once current in-flight finishes
 
+  async function applyRoute(level, slot, fallbackName) {
     const defaultName = fallbackName || `Route ${slot}`;
     const cachedFrame = frameCacheByKey.get(routeKey(level, slot));
 
     if (cachedFrame) {
-      // Update UI immediately from cached frame data, then send to device in background.
+      // Update UI immediately — never block on device latency.
       grid.applyFrameToState(cachedFrame);
       setSelectedRoute(level, slot, defaultName);
       setStatus(`Applied Level ${level} | ${defaultName}`);
-      api("POST", `/api/routes/${level}/${slot}/apply`).catch((error) => {
-        setStatus(`Device apply failed: ${error.message}`);
-      });
+
+      if (routeApplyInFlight) {
+        // Another apply is running; remember this as the desired final state.
+        pendingDeviceApply = { level, slot };
+      } else {
+        routeApplyInFlight = true;
+        pendingDeviceApply = null;
+        api("POST", `/api/routes/${level}/${slot}/apply`)
+          .catch((error) => {
+            setStatus(`Device apply failed: ${error.message}`);
+          })
+          .finally(() => {
+            routeApplyInFlight = false;
+            if (pendingDeviceApply) {
+              const { level: pl, slot: ps } = pendingDeviceApply;
+              pendingDeviceApply = null;
+              // Send the most recently desired route to the device.
+              routeApplyInFlight = true;
+              api("POST", `/api/routes/${pl}/${ps}/apply`)
+                .catch((err) => { setStatus(`Device apply failed: ${err.message}`); })
+                .finally(() => { routeApplyInFlight = false; });
+            }
+          });
+      }
       return;
     }
 
     // No cached frame — fall back to waiting for the server response.
+    if (routeApplyInFlight) {
+      setStatus("Please wait for the current route apply to finish.");
+      return;
+    }
     routeApplyInFlight = true;
     setRouteButtonsDisabled(true);
     try {
@@ -181,11 +203,6 @@ export function createRoutesController({
         button.disabled = routeApplyInFlight;
         button.textContent = `${slot}. ${name}`;
         button.addEventListener("click", () => {
-          if (isAdmin) {
-            setSelectedRoute(level, slot, name);
-            setStatus(`Selected Level ${level} | Slot ${slot} for save.`);
-            return;
-          }
           void applyRoute(level, slot, name);
         });
 
@@ -206,8 +223,7 @@ export function createRoutesController({
     }
 
     if (isAdmin && !selectedRoute && firstRoute) {
-      setSelectedRoute(firstRoute.level, firstRoute.slot, firstRoute.name);
-      setStatus(`Selected Level ${firstRoute.level} | Slot ${firstRoute.slot} for save.`);
+      void applyRoute(firstRoute.level, firstRoute.slot, firstRoute.name);
     }
 
     refreshRouteSelectionText();
