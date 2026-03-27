@@ -71,12 +71,12 @@
         if (unlockStatus) unlockStatus.textContent = text;
       }
 
-      form?.addEventListener("submit", async (event) => {
+      if (form) form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const pin = pinInput?.value.trim() || "";
+        const pin = pinInput ? pinInput.value.trim() : "";
         if (!pin) {
           setStatus("PIN is required.");
-          pinInput?.focus();
+          if (pinInput) pinInput.focus();
           return;
         }
 
@@ -84,7 +84,7 @@
         setStatus("Checking PIN...");
         try {
           const payload = await api("POST", "/api/admin/unlock", { pin });
-          const token = typeof payload?.token === "string" ? payload.token : "";
+          const token = payload && typeof payload.token === "string" ? payload.token : "";
           if (!token) {
             throw new Error("Unlock token missing.");
           }
@@ -92,14 +92,13 @@
           window.location.replace(`/admin?token=${encodeURIComponent(token)}&ts=${Date.now()}`);
         } catch (error) {
           setStatus(`Access denied: ${error.message}`);
-          pinInput?.select();
-          pinInput?.focus();
+          if (pinInput) { pinInput.select(); pinInput.focus(); }
         } finally {
           if (unlockBtn) unlockBtn.disabled = false;
         }
       });
 
-      pinInput?.focus();
+      if (pinInput) pinInput.focus();
       setStatus("Enter admin PIN to continue.");
     </script>
   </body>
