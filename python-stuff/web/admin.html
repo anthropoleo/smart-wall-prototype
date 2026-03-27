@@ -39,7 +39,7 @@
             Transport
             <select id="transportSelect">
               <option value="serial">Serial (USB)</option>
-              <option value="wifi">Wi‑Fi (LAN)</option>
+              <option value="wifi" selected>Wi‑Fi (LAN)</option>
             </select>
           </label>
           <label>
@@ -48,7 +48,7 @@
           </label>
           <label>
             Wi‑Fi Host
-            <input id="hostInput" type="text" value="" placeholder="ESP32 IP (e.g. 192.168.1.120)" />
+            <input id="hostInput" type="text" value="192.168.0.5" placeholder="ESP32 IP (e.g. 192.168.1.120)" />
           </label>
           <button id="refreshPorts">Refresh</button>
           <button id="connectBtn">Connect</button>

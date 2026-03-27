@@ -90,10 +90,10 @@ class RouteStore:
         with self._lock:
             levels: list[dict[str, Any]] = []
             for level in ROUTE_LEVELS:
-                routes = [
-                    {"slot": route["slot"], "name": route["name"]}
-                    for route in self._data["levels"][str(level)]
-                ]
+                routes = []
+                for route in self._data["levels"][str(level)]:
+                    frame = _frame_from_points(self._num_leds, route["points"])
+                    routes.append({"slot": route["slot"], "name": route["name"], "frame": frame})
                 levels.append({"level": level, "routes": routes})
             return {
                 "num_leds": self._num_leds,

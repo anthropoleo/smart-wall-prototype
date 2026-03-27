@@ -74,7 +74,7 @@ log = logging.getLogger("ledwall")
 
 app = FastAPI(title="LED Wall Controller", version="0.1.0")
 serial_ctrl = LedSerialController(port=os.getenv("LED_PORT"))
-wifi_ctrl = LedWifiController(host=os.getenv("LED_WIFI_HOST"))
+wifi_ctrl = LedWifiController(host=os.getenv("LED_WIFI_HOST", "192.168.0.5"))
 route_store = RouteStore(path=routes_path, num_leds=35)
 admin_pin = os.getenv("LED_ADMIN_PIN", os.getenv("LED_ROUTE_EDITOR_PIN", "2468"))
 try:
@@ -83,8 +83,8 @@ except ValueError:
     admin_token_ttl_seconds = 43200
 admin_tokens: dict[str, float] = {}
 admin_tokens_lock = threading.Lock()
-ctrl = serial_ctrl
-transport: Literal["serial", "wifi"] = "serial"
+ctrl = wifi_ctrl
+transport: Literal["serial", "wifi"] = "wifi"
 last_info: dict | None = None
 device_lock = threading.Lock()
 CHANNEL_ORDERS: dict[str, tuple[int, int, int]] = {
@@ -110,6 +110,23 @@ async def static_no_cache(request: Request, call_next):
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+@app.on_event("startup")
+def _startup_auto_connect():
+    global last_info
+    host = os.getenv("LED_WIFI_HOST", "192.168.0.5")
+    try:
+        with device_lock:
+            wifi_ctrl.connect(host)
+            try:
+                info = wifi_ctrl.info()
+                last_info = info.__dict__
+            except Exception:
+                last_info = None
+        log.info("Auto-connected to Wi-Fi at %s", host)
+    except Exception as e:
+        log.info("Wi-Fi auto-connect to %s failed: %s", host, e)
 
 
 class ConnectRequest(BaseModel):

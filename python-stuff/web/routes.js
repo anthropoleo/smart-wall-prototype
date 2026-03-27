@@ -17,6 +17,7 @@ export function createRoutesController({
   let selectedRoute = null;
   let routeApplyInFlight = false;
   const routeBtnByKey = new Map();
+  const frameCacheByKey = new Map();
 
   function routeKey(level, slot) {
     return `${level}:${slot}`;
@@ -66,10 +67,24 @@ export function createRoutesController({
       return;
     }
 
+    const defaultName = fallbackName || `Route ${slot}`;
+    const cachedFrame = frameCacheByKey.get(routeKey(level, slot));
+
+    if (cachedFrame) {
+      // Update UI immediately from cached frame data, then send to device in background.
+      grid.applyFrameToState(cachedFrame);
+      setSelectedRoute(level, slot, defaultName);
+      setStatus(`Applied Level ${level} | ${defaultName}`);
+      api("POST", `/api/routes/${level}/${slot}/apply`).catch((error) => {
+        setStatus(`Device apply failed: ${error.message}`);
+      });
+      return;
+    }
+
+    // No cached frame — fall back to waiting for the server response.
     routeApplyInFlight = true;
     setRouteButtonsDisabled(true);
     try {
-      const defaultName = fallbackName || `Route ${slot}`;
       setStatus(`Applying Level ${level} | ${defaultName}...`);
 
       let route = null;
@@ -118,6 +133,7 @@ export function createRoutesController({
 
     routeFoldersEl.innerHTML = "";
     routeBtnByKey.clear();
+    frameCacheByKey.clear();
     let firstRoute = null;
 
     if (!Array.isArray(levels) || !levels.length) {
@@ -153,6 +169,10 @@ export function createRoutesController({
         const name = String(route.name || `Route ${slot}`);
         if (!firstRoute) {
           firstRoute = { level, slot, name };
+        }
+
+        if (route.frame) {
+          frameCacheByKey.set(routeKey(level, slot), route.frame);
         }
 
         const button = document.createElement("button");
