@@ -108,6 +108,13 @@ function warnDeviceLedCount(numLeds) {
   setStatus(`Device reports ${numLeds} LEDs; UI layout expects ${NUM_LEDS}.`);
 }
 
+// In freestyle mode, debounce rapid pixel changes into a single bulk /api/frame
+// request rather than sending one /api/set per click. This means: clicking 5 LEDs
+// in quick succession fires one fast frame update instead of 5 queued single-pixel
+// requests. Falls back to /api/set for admin mode (no debounce needed there).
+let _debounceTimer = null;
+const _pendingCallbacks = [];
+
 const grid = createGridController({
   initialInteractive: isAdmin,
   stripEl: strip,
@@ -115,9 +122,22 @@ const grid = createGridController({
   colorInput: color,
   swatches,
   setStatus,
-  onSetPixel: async (index, r, g, b) => {
-    await api("POST", "/api/set", { index, r, g, b });
-  },
+  onSetPixel: isFreestyle
+    ? (_index, _r, _g, _b) =>
+        new Promise((resolve, reject) => {
+          _pendingCallbacks.push({ resolve, reject });
+          clearTimeout(_debounceTimer);
+          _debounceTimer = setTimeout(() => {
+            _debounceTimer = null;
+            const pending = _pendingCallbacks.splice(0);
+            api("POST", "/api/frame", { colors: grid.getFrame() })
+              .then(() => pending.forEach(({ resolve: res }) => res()))
+              .catch((err) => pending.forEach(({ reject: rej }) => rej(err)));
+          }, 30);
+        })
+    : async (index, r, g, b) => {
+        await api("POST", "/api/set", { index, r, g, b });
+      },
 });
 
 grid.init();
